@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>AI Steps Recorder - Recording Result</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #f8f9fa;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+
+        .header .subtitle {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+
+        .session-info {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .info-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .info-item-full-width {
+            grid-column: 1 / -1;
+        }
+
+        .info-label {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .info-value {
+            font-size: 14px;
+            font-weight: 500;
+            word-break: break-all; /* Keep this for safety */
+        }
+
+        .code-section {
+            background: white;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .code-header {
+            background: #f8f9fa;
+            padding: 15px 20px;
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .code-title {
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .copy-btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .copy-btn:hover {
+            background: #218838;
+        }
+
+        .copy-btn.copied {
+            background: #17a2b8;
+        }
+
+        .code-content {
+            position: relative;
+        }
+
+        .code-block {
+            background: #f8f9fa;
+            border: none;
+            padding: 20px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            color: #495057;
+            resize: none;
+            width: 100%;
+            min-height: 400px;
+            height: 400px;
+            border-radius: 0;
+        }
+
+        .code-block:focus {
+            outline: none;
+            background: #fff;
+        }
+
+        .steps-section {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .steps-title {
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #495057;
+        }
+
+        .step-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #f1f3f4;
+        }
+
+        .step-item:last-child {
+            border-bottom: none;
+        }
+
+        .step-number {
+            background: #667eea;
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 600;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+
+        .step-details {
+            flex-grow: 1;
+        }
+
+        .step-type {
+            font-weight: 500;
+            color: #495057;
+            text-transform: uppercase;
+            font-size: 11px;
+        }
+
+        .step-description {
+            font-size: 13px;
+            color: #6c757d;
+            margin-top: 2px;
+            overflow-wrap: break-word;
+            word-break: break-all;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 20px;
+        }
+
+        .action-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn-primary {
+            background: #007bff;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #0056b3;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #545b62;
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes progressStripes {
+            0% { background-position: 0 0, 0 0; }
+            100% { background-position: 30px 0, 0 0; }
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 20px 0;
+            border: 1px solid #f5c6cb;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #6c757d;
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+            opacity: 0.5;
+        }
+
+        .generating {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin: 20px 0;
+        }
+
+        .generate-spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+
+        .generate-status {
+            text-align: center;
+            width: 100%;
+            /* Stretch to container width for better visibility */
+            max-width: none;
+        }
+
+        .generate-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        .progress-container {
+            margin-bottom: 16px;
+            width: 100%;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 14px;
+            background: #eef1f4;
+            border-radius: 9999px;
+            overflow: hidden;
+            margin-bottom: 10px;
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.06);
+            border: 1px solid #e0e6ed;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            /* Subtle animated stripes for clarity */
+            background-image:
+              repeating-linear-gradient(
+                -45deg,
+                rgba(255,255,255,0.15) 0,
+                rgba(255,255,255,0.15) 8px,
+                rgba(255,255,255,0.05) 8px,
+                rgba(255,255,255,0.05) 16px
+              ),
+              linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            background-size: 30px 30px, auto;
+            animation: progressStripes 1.2s linear infinite;
+            border-radius: 9999px;
+            transition: width 0.3s ease;
+            width: 0%;
+            box-shadow: inset 0 -1px 0 rgba(0,0,0,0.08);
+        }
+
+        .progress-text {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 14px;
+            color: #495057;
+            font-weight: 500;
+        }
+
+        .generate-details {
+            font-size: 13px;
+            color: #999;
+            line-height: 1.4;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎬 AI Steps Recorder</h1>
+            <div class="subtitle">Recording Result Viewer</div>
+        </div>
+
+        <div id="loading" class="loading">
+            <div class="loading-spinner"></div>
+            <div>Loading recording result...</div>
+        </div>
+
+        <div id="generating" class="generating" style="display: none;">
+            <div class="generate-status">
+                <div class="generate-title">Generating Playwright Code...</div>
+                <div class="progress-container">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <div class="progress-text">
+                        <span id="progressStage">Preparing...</span>
+                        <span id="progressPercent">0%</span>
+                    </div>
+                </div>
+                <div class="generate-details" id="generateDetails">
+                    Processing your recorded steps...
+                </div>
+            </div>
+        </div>
+
+        <div id="content" style="display: none;">
+            <div class="session-info">
+                <div class="info-grid">
+                    <div class="info-item info-item-full-width">
+                        <div class="info-label">Session ID</div>
+                        <div class="info-value" id="sessionId">-</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Recording Mode</div>
+                        <div class="info-value" id="recordMode">-</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Output Format</div>
+                        <div class="info-value" id="outputFormat">-</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Steps Count</div>
+                        <div class="info-value" id="stepsCount">-</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Recording Duration</div>
+                        <div class="info-value" id="duration">-</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Completion Time</div>
+                        <div class="info-value" id="endTime">-</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Generated Using</div>
+                        <div class="info-value" id="generatedUsing">-</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="code-section">
+                <div class="code-header">
+                    <div class="code-title">Generated Playwright Code</div>
+                    <button class="copy-btn" id="copyCodeBtn">Copy Code</button>
+                </div>
+                <div class="code-content">
+                    <textarea id="playwrightCode" class="code-block" readonly placeholder="No Playwright code generated..."></textarea>
+                </div>
+            </div>
+
+            <div class="steps-section">
+                <div class="steps-title">Recording Steps Details</div>
+                <div id="stepsList"></div>
+            </div>
+
+            <div class="actions">
+                <button class="action-btn btn-success" id="downloadCodeBtn">Download Code</button>
+                <button class="action-btn btn-primary" id="exportSessionBtn">Export Session</button>
+                <a href="history.html" class="action-btn btn-secondary">View History</a>
+                <button class="action-btn btn-secondary" id="closeViewerBtn">Close</button>
+            </div>
+        </div>
+
+        <div id="error" class="error" style="display: none;"></div>
+
+        <div id="emptyState" class="empty-state" style="display: none;">
+            <div class="empty-state-icon">📝</div>
+            <div>No recording result found</div>
+            <div style="margin-top: 10px;">
+                <a href="history.html" class="action-btn btn-primary">View History</a>
+            </div>
+        </div>
+    </div>
+
+    <script src="result-viewer.js"></script>
+</body>
+</html>

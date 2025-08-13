@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Steps Recorder - Icon Exporter</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 24px; }
+    .row { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
+    .card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+    .preview { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 16px; }
+    .item { text-align: center; }
+    .item canvas { background: #f8fafc; border-radius: 8px; display: block; margin: 0 auto 8px; }
+    button { padding: 10px 14px; border: 0; border-radius: 8px; background: #667eea; color: #fff; font-weight: 600; cursor: pointer; }
+    button.secondary { background: #6b7280; }
+  </style>
+  <script>
+    function buildSVG(color) {
+      const c = color || '#ef4444';
+      return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <rect x="28" y="28" width="200" height="200" rx="40" fill="none" stroke="${c}" stroke-width="18"/>
+  <circle cx="128" cy="128" r="60" fill="${c}"/>
+</svg>`;
+    }
+
+    function svgToPngDataUrl(svgText, size) {
+      return new Promise((resolve, reject) => {
+        const svgBlob = new Blob([svgText], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(svgBlob);
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = size; canvas.height = size;
+          const ctx = canvas.getContext('2d');
+          ctx.clearRect(0,0,size,size);
+          // Draw with cover fit
+          ctx.drawImage(img, 0, 0, size, size);
+          URL.revokeObjectURL(url);
+          resolve({ url: canvas.toDataURL('image/png'), canvas });
+        };
+        img.onerror = reject;
+        img.src = url;
+      });
+    }
+
+    async function renderPreviews() {
+      const sizes = [16, 32, 48, 128];
+      const color = document.getElementById('color').value;
+      const svg = buildSVG(color);
+      const grid = document.getElementById('grid');
+      grid.innerHTML = '';
+      for (const s of sizes) {
+        const { url, canvas } = await svgToPngDataUrl(svg, s);
+        const wrapper = document.createElement('div');
+        wrapper.className = 'item';
+        wrapper.appendChild(canvas);
+        const label = document.createElement('div');
+        label.textContent = `${s}x${s}`;
+        wrapper.appendChild(label);
+        const btn = document.createElement('button');
+        btn.textContent = `Download ${s}px`;
+        btn.onclick = () => download(url, `icon${s}.png`);
+        wrapper.appendChild(btn);
+        grid.appendChild(wrapper);
+      }
+    }
+
+    function download(dataUrl, filename) {
+      const a = document.createElement('a');
+      a.href = dataUrl; a.download = filename; a.click();
+    }
+
+    async function downloadAll() {
+      const sizes = [16, 32, 48, 128];
+      const color = document.getElementById('color').value;
+      const svg = buildSVG(color);
+      for (const s of sizes) {
+        const { url } = await svgToPngDataUrl(svg, s);
+        download(url, `icon${s}.png`);
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      renderPreviews();
+      const dlAll = document.getElementById('downloadAllBtn');
+      const refresh = document.getElementById('refreshBtn');
+      dlAll && dlAll.addEventListener('click', (e) => { e.preventDefault(); downloadAll(); });
+      refresh && refresh.addEventListener('click', (e) => { e.preventDefault(); location.reload(); });
+      document.getElementById('color')?.addEventListener('change', () => renderPreviews());
+    });
+  </script>
+</head>
+<body>
+  <h1>AI Steps Recorder - Icon Exporter</h1>
+  <p>Preview and export the new icon PNGs at required sizes.</p>
+
+  <div class="card" style="margin: 16px 0;">
+    <div class="row">
+      <input id="color" type="color" value="#ef4444" title="Icon color" />
+      <button id="downloadAllBtn">Download all (16/32/48/128)</button>
+      <button id="refreshBtn" class="secondary">Refresh preview</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div id="grid" class="preview"></div>
+  </div>
+
+  <p style="color:#6b7280; margin-top:16px;">After downloading, replace files in <code>extension/icons/</code> with these names: <code>icon16.png</code>, <code>icon32.png</code>, <code>icon48.png</code>, <code>icon128.png</code>.</p>
+</body>
+</html>

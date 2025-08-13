@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Steps Recorder - History</title>
+    <link rel="stylesheet" href="history.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>🎬 AI Steps Recorder</h1>
+            <p class="subtitle">Recording History & Script Management</p>
+        </header>
+
+        <div class="controls">
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="Search recordings...">
+                <button id="searchBtn">🔍</button>
+            </div>
+            <div class="filter-options">
+                <select id="modeFilter">
+                    <option value="">All Modes</option>
+                    <option value="step-by-step">Step-by-Step</option>
+                    <option value="one-time">One-time</option>
+                </select>
+                <select id="formatFilter">
+                    <option value="">All Formats</option>
+                    <option value="javascript">JavaScript</option>
+                    <option value="python">Python</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="sessions-container">
+            <div id="loadingMessage" class="loading">Loading...</div>
+            <div id="emptyMessage" class="empty-message" style="display: none;">
+                <h3>No recordings yet</h3>
+                <p>Start using AI Steps Recorder to record your actions!</p>
+            </div>
+            <div id="sessionsList" class="sessions-list"></div>
+        </div>
+    </div>
+
+    <div id="codeModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+            <h3>Generated Playwright Code</h3>
+                <button class="close-btn" id="closeModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="code-actions">
+                    <button id="copyCodeBtn" class="btn btn-primary">Copy Code</button>
+                    <button id="downloadCodeBtn" class="btn btn-secondary">Download Code</button>
+                </div>
+                <pre id="codeContent"><code></code></pre>
+            </div>
+        </div>
+    </div>
+
+    <script src="history.js"></script>
+</body>
+</html>

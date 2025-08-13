@@ -1,0 +1,84 @@
+/* AI Steps Recorder Content Styles */
+
+.asr-element-highlight {
+  outline: 2px solid #3498db !important;
+  outline-offset: 2px !important;
+  position: relative !important;
+}
+
+.asr-element-highlight::before {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  right: -4px;
+  bottom: -4px;
+  background: rgba(52, 152, 219, 0.1);
+  pointer-events: none;
+  z-index: 999998;
+}
+
+/* Prevent toolbar from interfering with page interactions */
+#ai-steps-recorder-toolbar,
+#ai-steps-recorder-toolbar * {
+  pointer-events: auto !important;
+  user-select: none !important;
+}
+
+/* Ensure toolbar buttons work */
+#ai-steps-recorder-toolbar .asr-btn {
+  pointer-events: auto !important;
+  cursor: pointer !important;
+}
+
+/* Hide any existing elements that might conflict */
+.asr-hidden {
+  display: none !important;
+}
+
+/* Code notification animations */
+@keyframes slideDown {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.asr-code-notification {
+  animation: slideDown 0.3s ease !important;
+}
+
+.asr-code-notification.fade-out {
+  animation: fadeOut 0.3s ease !important;
+}
+
+/* Hover highlight overlay */
+#asr-hover-outline {
+  position: fixed;
+  top: 0; left: 0; width: 0; height: 0;
+  border: 4px solid #e74c3c;
+  border-radius: 8px;
+  box-shadow: 0 0 0 3px rgba(231, 76, 60, 0.25), 0 10px 28px rgba(0,0,0,0.28);
+  pointer-events: none;
+  z-index: 999999;
+  opacity: 0;
+  transition: opacity 0.08s ease, border-color 0.1s ease, box-shadow 0.1s ease;
+}
+
+#asr-hover-outline[data-color="red"] {
+  border-color: #e74c3c;
+  box-shadow: 0 0 0 3px rgba(231, 76, 60, 0.25), 0 10px 28px rgba(0,0,0,0.28);
+}
