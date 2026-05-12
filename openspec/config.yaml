@@ -1,0 +1,39 @@
+schema: spec-driven
+
+context: |
+  專案：AI Steps Recorder（Chrome Extension, Manifest V3）
+  目的：錄製使用者瀏覽器操作，透過 LLM 自動生成 Playwright 測試腳本
+
+  技術棧：
+  - Vanilla JavaScript（無 build step），HTML5 / CSS3
+  - Chrome Extension API（Manifest V3、service worker、content scripts）
+  - chrome.storage.sync（設定）／ chrome.storage.local（session 與暫存）
+  - Fetch API 對 LLM 端點通訊（OpenAI 相容、Gemini、Anthropic、本地 LM Studio / Ollama）
+
+  支援的錄製模式：
+  - step-by-step：每錄到一步即送 LLM，逐步累加 Playwright 程式碼
+  - one-time：錄完後一次性批次送 LLM，搭配進度條顯示
+
+  支援的輸出格式：JavaScript（Node Playwright）／ Python（async）／ Pytest（sync）
+
+  支援的 AI provider：LM Studio、Ollama、OpenAI、Google Gemini、Anthropic
+
+  程式碼撰寫慣例：
+  - 規格文件以繁體中文撰寫，但保留 SHALL / MUST / SHOULD 與 GIVEN / WHEN / THEN 結構
+  - 規格描述使用者觀察得到的行為（observable behavior），不寫實作機制
+  - 實作細節留給 design.md 或程式碼註解
+  - 變更需在 openspec/changes/<change-name>/ 建立 proposal + tasks + delta specs
+
+rules:
+  specs:
+    - 描述觀察得到的行為（observable behavior），不要把私有方法寫進 SHALL
+    - 涉及多 provider 的需求要列出每個 provider 的差異 scenario
+    - 涉及 chrome.storage 的需求要明確指出 sync vs local
+    - Scenario 內容統一使用粗體 GIVEN / WHEN / THEN / AND 關鍵字
+  tasks:
+    - 修改錄製器行為的變更，必須包含 iframe 與 top frame 兩個 scenario
+    - 修改 AI 互動的變更，必須包含 fallback 路徑 scenario
+    - 修改 chrome.storage 結構的變更，必須說明既有 session 的相容性
+  design:
+    - 與 Chrome MV3 service worker 生命週期有關的決策需在 design.md 說明
+    - 新增 AI provider 時須在 design.md 列出 request body / response 解析差異

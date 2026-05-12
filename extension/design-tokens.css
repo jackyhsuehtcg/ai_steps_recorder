@@ -1,0 +1,256 @@
+/*
+ * design-tokens.css — shared design system for AI Steps Recorder extension pages.
+ * Aligned with the "Obsidian Workshop" theme used by element_locator_generator.
+ *
+ * Loaded by popup.html / settings.html / history.html / result-viewer.html
+ * BEFORE each page's own stylesheet so overrides cascade correctly.
+ *
+ * NOT loaded by the in-page recorder (content.css / content.js inline styles)
+ * because that DOM lives inside the user's website and must use scoped selectors.
+ */
+
+:root {
+  /* === Background scale === */
+  --bg-base: #1e1e22;
+  --bg-surface: #26262c;
+  --bg-elevated: #313138;
+  --bg-input: #2a2a31;
+
+  /* === Borders === */
+  --border-subtle: #38383f;
+  --border-default: #48484f;
+  --border-focus: #5a5a64;
+
+  /* === Text === */
+  --text-primary: #d4d4dc;
+  --text-secondary: #9494a2;
+  --text-muted: #6a6a78;
+
+  /* === Accent (warm tan, primary action) === */
+  --accent: #d4a574;
+  --accent-hover: #ddb486;
+  --accent-glow: rgba(212, 165, 116, 0.12);
+  --accent-subtle: rgba(212, 165, 116, 0.06);
+
+  /* === Semantic === */
+  --success: #7fb88a;
+  --success-bg: rgba(127, 184, 138, 0.06);
+  --success-border: rgba(127, 184, 138, 0.2);
+  --error: #c97474;
+  --error-bg: rgba(201, 116, 116, 0.06);
+  --error-border: rgba(201, 116, 116, 0.2);
+  --warning: #c9a86c;
+  --warning-bg: rgba(201, 168, 108, 0.06);
+  --warning-border: rgba(201, 168, 108, 0.2);
+  --teal: #6ca0b8;
+  --purple: #8a6cc9;
+
+  /* === Typography === */
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Consolas', 'Menlo', monospace;
+  --font-sans: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+  /* === Spacing scale (4px base) === */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* === Radii === */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-pill: 9999px;
+
+  /* === Shadows === */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.45);
+  --shadow-glow: 0 0 20px var(--accent-glow);
+
+  /* === Transitions === */
+  --transition-fast: 160ms ease;
+  --transition-normal: 260ms ease;
+}
+
+/* === Base reset === */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Headings inherit mono font for the IDE feel */
+h1, h2, h3, h4 {
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+a {
+  color: var(--teal);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+a:hover {
+  color: var(--accent);
+}
+
+code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--bg-base);
+  color: var(--accent);
+  padding: 2px 5px;
+  border-radius: var(--radius-sm);
+}
+
+/* === Scrollbar (WebKit) === */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-base);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: var(--radius-sm);
+  border: 2px solid var(--bg-base);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-focus);
+}
+
+/* === Selection === */
+::selection {
+  background: var(--accent-glow);
+  color: var(--text-primary);
+}
+
+/* === Focus ring === */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* === Common utility classes === */
+.btn {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 9px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  transition: all var(--transition-normal);
+  white-space: nowrap;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--bg-base);
+  font-weight: 600;
+  border-color: var(--accent);
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+  box-shadow: var(--shadow-md), var(--shadow-glow);
+  transform: translateY(-1px);
+}
+.btn-primary:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.btn-secondary {
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  border-color: var(--border-default);
+}
+.btn-secondary:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+  border-color: var(--border-subtle);
+}
+.btn-ghost:hover:not(:disabled) {
+  border-color: var(--border-default);
+  color: var(--text-primary);
+}
+
+.btn-danger {
+  background: transparent;
+  color: var(--error);
+  border-color: var(--error-border);
+}
+.btn-danger:hover:not(:disabled) {
+  background: var(--error-bg);
+  border-color: var(--error);
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* Status-banner (used for test result, redacted notice, errors) */
+.status-banner {
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-elevated);
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.status-banner-success {
+  background: var(--success-bg);
+  border-color: var(--success-border);
+  color: var(--success);
+}
+.status-banner-error {
+  background: var(--error-bg);
+  border-color: var(--error-border);
+  color: var(--error);
+}
+.status-banner-warning {
+  background: var(--warning-bg);
+  border-color: var(--warning-border);
+  color: var(--warning);
+}
+.status-banner-info {
+  background: var(--accent-subtle);
+  border-color: rgba(212, 165, 116, 0.2);
+  color: var(--accent);
+}

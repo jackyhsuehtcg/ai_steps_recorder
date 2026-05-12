@@ -1,4 +1,4 @@
-// settings.js - AI Steps Recorder 設定頁面功能
+// settings.js - AI Steps Recorder settings page
 
 class SettingsManager {
   constructor() {
@@ -20,37 +20,24 @@ class SettingsManager {
         requiresKey: false,
         parameterName: 'max_tokens'
       },
-      ollama: {
-        name: 'Ollama',
-        apiUrl: 'http://localhost:11434/v1/chat/completions',
-        models: ['llama3.2', 'llama3.1', 'llama2', 'codellama', 'mistral'],
-        defaultModel: 'llama3.2',
-        requiresKey: false,
-        parameterName: 'max_tokens'
-      },
-      openai: {
-        name: 'OpenAI',
-        apiUrl: 'https://api.openai.com/v1/chat/completions',
-        models: ['gpt-5', 'gpt-5-mini', 'gpt-4o'],
-        defaultModel: 'gpt-5',
+      openrouter: {
+        name: 'OpenRouter',
+        apiUrl: 'https://openrouter.ai/api/v1/chat/completions',
+        // Suggestion list shown via <datalist>; users may type any OpenRouter model id.
+        models: [
+          'anthropic/claude-sonnet-4',
+          'anthropic/claude-3.7-sonnet',
+          'openai/gpt-5',
+          'openai/gpt-4o',
+          'google/gemini-2.5-flash',
+          'google/gemini-2.5-pro',
+          'meta-llama/llama-3.3-70b-instruct',
+          'deepseek/deepseek-chat'
+        ],
+        defaultModel: 'anthropic/claude-sonnet-4',
         requiresKey: true,
-        parameterName: 'max_completion_tokens'
-      },
-      gemini: {
-        name: 'Google Gemini',
-        apiUrl: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
-        models: ['gemini-2.5-flash', 'gemini-2.5-pro'],
-        defaultModel: 'gemini-2.5-flash',
-        requiresKey: true,
-        parameterName: 'maxOutputTokens'
-      },
-      anthropic: {
-        name: 'Anthropic',
-        apiUrl: 'https://api.anthropic.com/v1/messages',
-        models: ['claude-4-sonnet-20250514', 'claude-3-7-sonnet-20250219'],
-        defaultModel: 'claude-4-sonnet-20250514',
-        requiresKey: true,
-        parameterName: 'max_tokens'
+        parameterName: 'max_tokens',
+        freeFormModel: true
       }
     };
 
@@ -58,12 +45,12 @@ class SettingsManager {
   }
 
   async init() {
-    // 載入當前設定
+    // Load current settings
     await this.loadSettings();
-    
-    // 綁定事件
+
+    // Wire up form events
     this.bindEvents();
-    
+
     console.log('Settings manager initialized');
   }
 
@@ -71,8 +58,38 @@ class SettingsManager {
     try {
       const result = await chrome.storage.sync.get(this.defaultSettings);
       this.currentSettings = { ...this.defaultSettings, ...result };
-      
-      // 填入表單
+
+      // Detect deprecated provider values, downgrade silently to LM Studio default,
+      // and notify the user with a one-time inline message.
+      const removedProviders = ['gemini', 'anthropic', 'openai', 'ollama'];
+      if (removedProviders.includes(this.currentSettings.provider)) {
+        const removedProvider = this.currentSettings.provider;
+        this.currentSettings.provider = this.defaultSettings.provider;
+        this.currentSettings.apiUrl = this.defaultSettings.apiUrl;
+        this.currentSettings.modelName = this.defaultSettings.modelName;
+        try {
+          await chrome.storage.sync.set({
+            provider: this.currentSettings.provider,
+            apiUrl: this.currentSettings.apiUrl,
+            modelName: this.currentSettings.modelName
+          });
+        } catch (e) {
+          console.warn('Failed to persist provider downgrade:', e);
+        }
+        const removedNames = {
+          gemini: 'Gemini',
+          anthropic: 'Anthropic',
+          openai: 'OpenAI',
+          ollama: 'Ollama'
+        };
+        const removedName = removedNames[removedProvider] || removedProvider;
+        const message = removedProvider === 'ollama'
+          ? `Ollama is no longer supported. Switched back to LM Studio. To keep using Ollama, leave the provider as LM Studio and change the API URL to http://localhost:11434/v1/chat/completions.`
+          : `${removedName} is no longer supported. Switched back to LM Studio. Please choose OpenRouter or another provider.`;
+        this.showMessage(message, 'info');
+      }
+
+      // Populate the form with the (possibly downgraded) settings
       this.populateForm();
     } catch (error) {
       console.error('Failed to load settings:', error);
@@ -88,29 +105,29 @@ class SettingsManager {
     document.getElementById('apiKey').value = this.currentSettings.apiKey;
     document.getElementById('temperature').value = this.currentSettings.temperature;
     document.getElementById('maxTokens').value = this.currentSettings.maxTokens;
-    
-    // 更新模型選項和其他欄位
+
+    // Update model options + provider-specific fields
     this.updateProviderFields(this.currentSettings.provider || 'lmstudio');
   }
 
   bindEvents() {
-    // 提供商變更
+    // Provider switch
     document.getElementById('provider').addEventListener('change', (e) => {
       this.updateProviderFields(e.target.value);
     });
 
-    // 表單提交
+    // Form submit
     document.getElementById('settingsForm').addEventListener('submit', (e) => {
       e.preventDefault();
       this.saveSettings();
     });
 
-    // 測試連接
+    // Test connection
     document.getElementById('testButton').addEventListener('click', () => {
       this.testConnection();
     });
 
-    // 即時驗證 URL 格式
+    // Live URL validation
     document.getElementById('apiUrl').addEventListener('input', (e) => {
       this.validateUrl(e.target);
     });
@@ -122,54 +139,92 @@ class SettingsManager {
     }
 
     const provider = this.providers[providerId];
-    
-    // 更新 API URL
+
+    // Update API URL
     document.getElementById('apiUrl').value = provider.apiUrl;
-    
-    // 更新模型名稱為下拉選單
+
+    // Re-render the model name field based on provider.freeFormModel:
+    //   true  -> <input type="text"> + <datalist> suggestions
+    //   false -> <select> dropdown
     const modelNameInput = document.getElementById('modelName');
     const modelContainer = modelNameInput.parentElement;
-    
-    // 移除現有的模型輸入框
-    modelNameInput.remove();
-    
-    // 創建模型選擇下拉選單
-    const modelSelect = document.createElement('select');
-    modelSelect.id = 'modelName';
-    modelSelect.name = 'modelName';
-    modelSelect.className = 'form-input';
-    modelSelect.required = true;
-    
-    // 添加模型選項
-    provider.models.forEach(model => {
-      const option = document.createElement('option');
-      option.value = model;
-      option.textContent = model;
-      if (model === provider.defaultModel) {
-        option.selected = true;
-      }
-      modelSelect.appendChild(option);
-    });
-    
-    // 插入新的下拉選單
     const modelHint = modelContainer.querySelector('.form-hint');
-    modelContainer.insertBefore(modelSelect, modelHint);
-    
-    // 更新提示文字
-    modelHint.textContent = `選擇 ${provider.name} 模型`;
-    
-    // 更新 API Key 欄位的提示和必填狀態
+
+    // Remove the existing modelName element and any leftover datalist (avoid id collisions)
+    modelNameInput.remove();
+    const staleDatalist = modelContainer.querySelector('datalist[data-modelname-suggestions]');
+    if (staleDatalist) staleDatalist.remove();
+
+    // Preferred default value: keep the user's existing setting when staying on the same
+    // provider, otherwise fall back to the provider's default model.
+    const preferredValue = (this.currentSettings && this.currentSettings.provider === providerId
+      ? this.currentSettings.modelName
+      : '') || provider.defaultModel || '';
+
+    if (provider.freeFormModel) {
+      // Free-form text input with suggestion datalist
+      const datalistId = `modelName-suggestions-${providerId}`;
+
+      const modelInput = document.createElement('input');
+      modelInput.type = 'text';
+      modelInput.id = 'modelName';
+      modelInput.name = 'modelName';
+      modelInput.className = 'form-input';
+      modelInput.required = true;
+      modelInput.autocomplete = 'off';
+      modelInput.spellcheck = false;
+      modelInput.setAttribute('list', datalistId);
+      modelInput.placeholder = `e.g. ${provider.defaultModel || ''}`;
+      modelInput.value = preferredValue;
+
+      const datalist = document.createElement('datalist');
+      datalist.id = datalistId;
+      datalist.dataset.modelnameSuggestions = '1';
+      provider.models.forEach(model => {
+        const option = document.createElement('option');
+        option.value = model;
+        datalist.appendChild(option);
+      });
+
+      modelContainer.insertBefore(modelInput, modelHint);
+      modelContainer.insertBefore(datalist, modelHint);
+
+      modelHint.textContent = `Enter any model id supported by ${provider.name}. Pick from the suggestions or type your own (e.g. ${provider.defaultModel || ''}).`;
+    } else {
+      // Default: <select> dropdown
+      const modelSelect = document.createElement('select');
+      modelSelect.id = 'modelName';
+      modelSelect.name = 'modelName';
+      modelSelect.className = 'form-input';
+      modelSelect.required = true;
+
+      provider.models.forEach(model => {
+        const option = document.createElement('option');
+        option.value = model;
+        option.textContent = model;
+        if (model === preferredValue) {
+          option.selected = true;
+        }
+        modelSelect.appendChild(option);
+      });
+
+      modelContainer.insertBefore(modelSelect, modelHint);
+
+      modelHint.textContent = `Choose a ${provider.name} model.`;
+    }
+
+    // Update API Key field hint and required state
     const apiKeyInput = document.getElementById('apiKey');
     const apiKeyHint = apiKeyInput.parentElement.querySelector('.form-hint');
     const apiKeyLabel = apiKeyInput.parentElement.querySelector('.form-label .label-text');
-    
+
     if (provider.requiresKey) {
       apiKeyInput.required = true;
-      apiKeyHint.textContent = `${provider.name} API Key (必填)`;
+      apiKeyHint.textContent = `${provider.name} API key (required).`;
       apiKeyLabel.innerHTML = 'API Key <span class="label-required">*</span>';
     } else {
       apiKeyInput.required = false;
-      apiKeyHint.textContent = `${provider.name} API Key (選填，本地服務通常不需要)`;
+      apiKeyHint.textContent = `${provider.name} API key (optional; not required for local servers).`;
       apiKeyLabel.innerHTML = 'API Key';
     }
   }
@@ -177,44 +232,26 @@ class SettingsManager {
   buildRequestBody(settings, content, maxTokens) {
     const provider = this.providers[settings.provider];
     if (!provider) {
-      throw new Error('未知的提供商');
+      throw new Error('Unknown provider');
     }
 
     switch (settings.provider) {
-      case 'openai':
       case 'lmstudio':
-      case 'ollama':
+      case 'openrouter':
         const requestBody = {
           model: settings.modelName,
           messages: [{ role: "user", content: content }],
           [provider.parameterName]: maxTokens,
           stream: false
         };
-        
-        // 添加溫度設定
+
+        // Apply temperature
         requestBody.temperature = settings.temperature;
-        
+
         return requestBody;
-      
-      case 'gemini':
-        return {
-          contents: [{ parts: [{ text: content }] }],
-          generationConfig: {
-            temperature: settings.temperature,
-            maxOutputTokens: maxTokens
-          }
-        };
-      
-      case 'anthropic':
-        return {
-          model: settings.modelName,
-          max_tokens: maxTokens,
-          temperature: settings.temperature,
-          messages: [{ role: "user", content: content }]
-        };
-      
+
       default:
-        throw new Error('不支援的提供商類型');
+        throw new Error('Unsupported provider type');
     }
   }
 
@@ -222,20 +259,17 @@ class SettingsManager {
     if (!settings.apiKey) return;
 
     switch (settings.provider) {
-      case 'openai':
       case 'lmstudio':
-      case 'ollama':
+      case 'openrouter':
         headers['Authorization'] = `Bearer ${settings.apiKey}`;
-        break;
-      
-      case 'gemini':
-        // Gemini 使用 URL 參數，不需要 header
-        break;
-      
-      case 'anthropic':
-        headers['x-api-key'] = settings.apiKey;
-        headers['anthropic-version'] = '2023-06-01';
-        headers['anthropic-dangerous-direct-browser-access'] = 'true';
+        if (settings.provider === 'openrouter') {
+          // OpenRouter recommends sending these two headers so third-party apps
+          // appear in their dashboard rankings.
+          try {
+            headers['HTTP-Referer'] = `chrome-extension://${chrome.runtime.id}`;
+          } catch (_) {}
+          headers['X-Title'] = 'AI Steps Recorder';
+        }
         break;
     }
   }
@@ -246,7 +280,7 @@ class SettingsManager {
       input.setCustomValidity('');
     } catch {
       if (input.value) {
-        input.setCustomValidity('請輸入有效的 URL 格式');
+        input.setCustomValidity('Please enter a valid URL.');
       } else {
         input.setCustomValidity('');
       }
@@ -255,7 +289,7 @@ class SettingsManager {
 
   async saveSettings() {
     try {
-      // 獲取表單資料
+      // Read form data
       const formData = new FormData(document.getElementById('settingsForm'));
       const settings = {
         provider: formData.get('provider').trim(),
@@ -266,37 +300,37 @@ class SettingsManager {
         maxTokens: parseInt(formData.get('maxTokens')) || 2000
       };
 
-      // 驗證 URL
+      // Validate API URL
       try {
         new URL(settings.apiUrl);
       } catch {
-        this.showMessage('請輸入有效的 API URL', 'error');
+        this.showMessage('Please enter a valid API URL.', 'error');
         return;
       }
 
-      // 儲存到 Chrome storage
+      // Persist to Chrome storage
       await chrome.storage.sync.set(settings);
       this.currentSettings = settings;
-      
-      this.showMessage('設定已成功儲存！', 'success');
-      
+
+      this.showMessage('Settings saved successfully.', 'success');
+
       console.log('Settings saved:', settings);
     } catch (error) {
       console.error('Failed to save settings:', error);
-      this.showMessage('儲存設定時發生錯誤：' + error.message, 'error');
+      this.showMessage('Failed to save settings: ' + error.message, 'error');
     }
   }
 
   async testConnection() {
     const testButton = document.getElementById('testButton');
     const originalText = testButton.textContent;
-    
+
     try {
-      // 禁用按鈕並顯示載入狀態
+      // Disable the button while the test is in flight
       testButton.disabled = true;
-      testButton.textContent = '🔄 測試中...';
-      
-      // 獲取當前表單的設定
+      testButton.textContent = '🔄 Testing...';
+
+      // Read settings from the form
       const formData = new FormData(document.getElementById('settingsForm'));
       const settings = {
         provider: formData.get('provider').trim(),
@@ -307,23 +341,19 @@ class SettingsManager {
         maxTokens: parseInt(formData.get('maxTokens')) || 2000
       };
 
-      // 根據提供商準備不同的請求體
-      const requestBody = this.buildRequestBody(settings, "測試連接：請回應 'OK'", 50);
+      // Provider-specific request body
+      const requestBody = this.buildRequestBody(settings, "Connection test: please reply with 'OK'.", 50);
 
       const headers = {
         'Content-Type': 'application/json'
       };
 
-      // 根據提供商設定 headers
+      // Provider-specific auth headers
       this.setAuthHeaders(headers, settings);
 
-      // 處理 Gemini API URL
-      let apiUrl = settings.apiUrl;
-      if (settings.provider === 'gemini' && settings.apiKey) {
-        apiUrl += `?key=${settings.apiKey}`;
-      }
+      const apiUrl = settings.apiUrl;
 
-      // 發送測試請求
+      // Send the smoke-test request
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: headers,
@@ -331,58 +361,43 @@ class SettingsManager {
       });
 
       if (!response.ok) {
-        const errorText = await response.text().catch(() => '無法讀取錯誤訊息');
+        const errorText = await response.text().catch(() => 'Could not read error response');
         throw new Error(`HTTP ${response.status}: ${errorText}`);
       }
 
       const data = await response.json();
-      
-      // 根據不同提供商解析回應
+
+      // Provider-specific response parsing
       let responseContent = '';
       switch (settings.provider) {
-        case 'openai':
         case 'lmstudio':
-        case 'ollama':
+        case 'openrouter':
           if (!data.choices || data.choices.length === 0) {
-            throw new Error('API 回應格式異常：沒有找到 choices 欄位');
+            throw new Error('Unexpected API response: no choices field found.');
           }
-          responseContent = data.choices[0].message?.content || '已收到回應';
+          responseContent = data.choices[0].message?.content || 'Response received';
           break;
-        
-        case 'gemini':
-          if (!data.candidates || data.candidates.length === 0) {
-            throw new Error('Gemini API 回應格式異常：沒有找到 candidates 欄位');
-          }
-          responseContent = data.candidates[0].content?.parts?.[0]?.text || '已收到回應';
-          break;
-        
-        case 'anthropic':
-          if (!data.content || data.content.length === 0) {
-            throw new Error('Anthropic API 回應格式異常：沒有找到 content 欄位');
-          }
-          responseContent = data.content[0]?.text || '已收到回應';
-          break;
-        
+
         default:
-          responseContent = '已收到回應';
+          responseContent = 'Response received';
       }
 
-      // 測試成功
-      this.showTestResult('✅ 連接測試成功！', 'success', `回應：${responseContent}`);
-      
+      // Success
+      this.showTestResult('✅ Connection test succeeded!', 'success', `Response: ${responseContent}`);
+
     } catch (error) {
       console.error('Connection test failed:', error);
-      let errorMessage = '連接測試失敗';
-      
+      let errorMessage = 'Connection test failed';
+
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
-        errorMessage = '無法連接到伺服器，請檢查 URL 是否正確且伺服器正在運行';
+        errorMessage = 'Cannot reach the server. Verify the URL is correct and the server is running.';
       } else {
-        errorMessage = `連接測試失敗：${error.message}`;
+        errorMessage = `Connection test failed: ${error.message}`;
       }
-      
+
       this.showTestResult('❌ ' + errorMessage, 'error');
     } finally {
-      // 恢復按鈕狀態
+      // Restore button state
       testButton.disabled = false;
       testButton.textContent = originalText;
     }
@@ -392,8 +407,8 @@ class SettingsManager {
     const resultDiv = document.getElementById('testResult');
     const iconDiv = document.getElementById('testResultIcon');
     const messageDiv = document.getElementById('testResultMessage');
-    
-    // 設定圖示和訊息
+
+    // Set icon and message
     if (type === 'success') {
       iconDiv.textContent = '✅';
       messageDiv.innerHTML = `<strong>${message}</strong>${detail ? `<br><small>${detail}</small>` : ''}`;
@@ -403,11 +418,11 @@ class SettingsManager {
       messageDiv.innerHTML = `<strong>${message}</strong>${detail ? `<br><small>${detail}</small>` : ''}`;
       resultDiv.className = 'test-result test-result-error';
     }
-    
-    // 顯示結果
+
+    // Show the result panel
     resultDiv.style.display = 'block';
-    
-    // 自動隱藏成功訊息
+
+    // Auto-hide success messages after a few seconds
     if (type === 'success') {
       setTimeout(() => {
         resultDiv.style.display = 'none';
@@ -416,18 +431,18 @@ class SettingsManager {
   }
 
   showMessage(message, type = 'info') {
-    // 創建臨時通知
+    // Top-of-page transient toast
     const notification = document.createElement('div');
     notification.className = `notification notification-${type}`;
     notification.innerHTML = `
       <span>${message}</span>
       <button class="notification-close" onclick="this.parentElement.remove()">✖</button>
     `;
-    
-    // 插入到頁面頂部
+
+    // Insert at the top of the body
     document.body.insertBefore(notification, document.body.firstChild);
-    
-    // 自動移除
+
+    // Auto-remove after 5 seconds
     setTimeout(() => {
       if (notification.parentElement) {
         notification.remove();
@@ -436,7 +451,7 @@ class SettingsManager {
   }
 }
 
-// 初始化
+// Initialize on DOM ready
 document.addEventListener('DOMContentLoaded', () => {
   new SettingsManager();
 });

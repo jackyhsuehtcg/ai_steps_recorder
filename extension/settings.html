@@ -1,35 +1,33 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Steps Recorder - 設定</title>
+    <title>AI Steps Recorder - Settings</title>
+    <link rel="stylesheet" href="design-tokens.css">
     <link rel="stylesheet" href="settings.css">
 </head>
 <body>
     <div class="container">
         <header class="header">
             <h1>🎬 AI Steps Recorder</h1>
-            <p class="subtitle">設定 AI 模型和 API 伺服器</p>
+            <p class="subtitle">Configure AI model and API server</p>
         </header>
 
         <main class="main-content">
             <form class="settings-form" id="settingsForm">
                 <div class="form-group">
                     <label for="provider" class="form-label">
-                        <span class="label-text">模型提供商</span>
+                        <span class="label-text">Model Provider</span>
                         <span class="label-required">*</span>
                     </label>
                     <select id="provider" name="provider" class="form-input" required>
-                        <option value="">請選擇模型提供商</option>
-                        <option value="lmstudio">LM Studio (本地)</option>
-                        <option value="ollama">Ollama (本地)</option>
-                        <option value="openai">OpenAI</option>
-                        <option value="gemini">Google Gemini</option>
-                        <option value="anthropic">Anthropic Claude</option>
+                        <option value="">Select a model provider...</option>
+                        <option value="lmstudio">LM Studio (local)</option>
+                        <option value="openrouter">OpenRouter</option>
                     </select>
                     <div class="form-hint">
-                        選擇你要使用的 AI 模型提供商
+                        Choose the AI model provider you want to use.
                     </div>
                 </div>
 
@@ -38,34 +36,34 @@
                         <span class="label-text">API URL</span>
                         <span class="label-required">*</span>
                     </label>
-                    <input 
-                        type="url" 
-                        id="apiUrl" 
-                        name="apiUrl" 
-                        class="form-input" 
+                    <input
+                        type="url"
+                        id="apiUrl"
+                        name="apiUrl"
+                        class="form-input"
                         placeholder="http://localhost:1234/v1/chat/completions"
                         required
                     >
                     <div class="form-hint">
-                        輸入你的 AI API 伺服器 URL
+                        Enter the chat completions endpoint of your AI API server.
                     </div>
                 </div>
 
                 <div class="form-group">
                     <label for="modelName" class="form-label">
-                        <span class="label-text">模型名稱</span>
+                        <span class="label-text">Model Name</span>
                         <span class="label-required">*</span>
                     </label>
-                    <input 
-                        type="text" 
-                        id="modelName" 
-                        name="modelName" 
-                        class="form-input" 
+                    <input
+                        type="text"
+                        id="modelName"
+                        name="modelName"
+                        class="form-input"
                         placeholder="lm-studio"
                         required
                     >
                     <div class="form-hint">
-                        選擇要使用的具體模型
+                        Choose the specific model to use.
                     </div>
                 </div>
 
@@ -73,15 +71,15 @@
                     <label for="apiKey" class="form-label">
                         <span class="label-text">API Key</span>
                     </label>
-                    <input 
-                        type="password" 
-                        id="apiKey" 
-                        name="apiKey" 
-                        class="form-input" 
+                    <input
+                        type="password"
+                        id="apiKey"
+                        name="apiKey"
+                        class="form-input"
                         placeholder="sk-..."
                     >
                     <div class="form-hint">
-                        API 金鑰（選填，本地服務通常不需要）
+                        API key (optional; not required for local servers).
                     </div>
                 </div>
 
@@ -89,18 +87,18 @@
                     <label for="temperature" class="form-label">
                         <span class="label-text">Temperature</span>
                     </label>
-                    <input 
-                        type="number" 
-                        id="temperature" 
-                        name="temperature" 
-                        class="form-input" 
-                        min="0" 
-                        max="2" 
-                        step="0.1" 
+                    <input
+                        type="number"
+                        id="temperature"
+                        name="temperature"
+                        class="form-input"
+                        min="0"
+                        max="2"
+                        step="0.1"
                         value="0.1"
                     >
                     <div class="form-hint">
-                        控制回應的隨機性（0.0 - 2.0，建議 0.1 以獲得穩定結果）
+                        Controls response randomness (0.0 – 2.0). 0.1 recommended for stable output.
                     </div>
                 </div>
 
@@ -108,26 +106,26 @@
                     <label for="maxTokens" class="form-label">
                         <span class="label-text">Max Tokens</span>
                     </label>
-                    <input 
-                        type="number" 
-                        id="maxTokens" 
-                        name="maxTokens" 
-                        class="form-input" 
-                        min="100" 
-                        max="4096" 
+                    <input
+                        type="number"
+                        id="maxTokens"
+                        name="maxTokens"
+                        class="form-input"
+                        min="100"
+                        max="4096"
                         value="2000"
                     >
                     <div class="form-hint">
-                        最大生成 token 數量（100 - 4096）
+                        Maximum tokens to generate (100 – 4096).
                     </div>
                 </div>
 
                 <div class="form-actions">
                     <button type="button" id="testButton" class="btn btn-secondary">
-                        🧪 測試連接
+                        🧪 Test Connection
                     </button>
                     <button type="submit" class="btn btn-primary">
-                        💾 儲存設定
+                        💾 Save Settings
                     </button>
                 </div>
             </form>
@@ -140,27 +138,19 @@
             </div>
 
             <div class="help-section">
-                <h3>使用說明</h3>
+                <h3>Usage Notes</h3>
                 <div class="help-content">
                     <div class="help-item">
-                        <strong>LM Studio:</strong> 
-                        本地 AI 模型服務，預設 URL：<code>http://localhost:1234/v1/chat/completions</code>
+                        <strong>LM Studio (local, OpenAI compatible):</strong>
+                        Local AI server, default URL <code>http://localhost:1234/v1/chat/completions</code>. No API key required. Pick from the dropdown of models loaded in LM Studio.
                     </div>
                     <div class="help-item">
-                        <strong>Ollama:</strong> 
-                        本地 AI 模型服務，預設 URL：<code>http://localhost:11434/v1/chat/completions</code>
+                        <strong>Want to use Ollama or another local endpoint?</strong>
+                        Keep the LM Studio provider and change the API URL to <code>http://localhost:11434/v1/chat/completions</code> (the protocol is 1:1 compatible).
                     </div>
                     <div class="help-item">
-                        <strong>OpenAI:</strong> 
-                        OpenAI 官方 API，需要 API Key，支援 GPT-5、GPT-4o 等最新模型
-                    </div>
-                    <div class="help-item">
-                        <strong>Google Gemini:</strong> 
-                        Google 的 Gemini AI 服務，需要 API Key，支援 Gemini 2.5 系列模型
-                    </div>
-                    <div class="help-item">
-                        <strong>Anthropic Claude:</strong> 
-                        Anthropic 的 Claude AI 服務，需要 API Key，支援 Claude 4 Sonnet 等最新模型
+                        <strong>OpenRouter (cloud aggregator):</strong>
+                        One API key routes to Claude / GPT / Gemini / Llama / DeepSeek and more. Default URL <code>https://openrouter.ai/api/v1/chat/completions</code>. Requires an <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">OpenRouter API Key</a>. The model name field is a free-form text input with autocomplete suggestions; type any model id supported by OpenRouter, e.g. <code>anthropic/claude-sonnet-4</code>, <code>openai/gpt-5</code>, <code>google/gemini-2.5-flash</code>.
                     </div>
                 </div>
             </div>

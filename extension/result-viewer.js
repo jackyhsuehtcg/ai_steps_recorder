@@ -36,7 +36,7 @@ class ResultViewer {
       throw new Error('No session ID specified and no latest recording result found');
     }
 
-    // 從 Chrome 存儲中獲取會話資料
+    // Fetch the session record from chrome.storage.local
     const result = await chrome.storage.local.get(sessionId);
     
     if (!result[sessionId]) {
@@ -155,6 +155,22 @@ class ResultViewer {
     this.isGenerating = false;
     document.getElementById('generating').style.display = 'none';
     this.renderSessionData();
+
+    // Phase 3.3: clean up temp/progress keys now that the result is rendered
+    this.cleanupTempKeys();
+  }
+
+  cleanupTempKeys() {
+    try {
+      const tempKey = new URLSearchParams(window.location.search).get('temp');
+      const keysToRemove = [];
+      if (tempKey) keysToRemove.push(tempKey);
+      if (this.sessionData && this.sessionData.id) {
+        keysToRemove.push(`progress_${this.sessionData.id}`);
+      }
+      if (keysToRemove.length === 0) return;
+      chrome.storage.local.remove(keysToRemove).catch(() => {});
+    } catch (_) {}
   }
 
   renderSessionData() {
@@ -196,7 +212,7 @@ class ResultViewer {
     }
     
     if (sessionInfo.endTime) {
-      document.getElementById('endTime').textContent = new Date(sessionInfo.endTime).toLocaleString('zh-TW');
+      document.getElementById('endTime').textContent = new Date(sessionInfo.endTime).toLocaleString('en-US');
     }
     
     // Display the LLM information
@@ -205,11 +221,28 @@ class ResultViewer {
 
   renderPlaywrightCode() {
     const codeTextarea = document.getElementById('playwrightCode');
-    
+
     if (this.sessionData.playwrightCode) {
       codeTextarea.value = this.sessionData.playwrightCode;
     } else {
       codeTextarea.placeholder = 'No Playwright code generated';
+    }
+
+    // Phase 1.1: redaction warning banner
+    this.updateRedactedBanner(this.sessionData.playwrightCode || '');
+  }
+
+  updateRedactedBanner(code) {
+    const banner = document.getElementById('redactedBanner');
+    const countEl = document.getElementById('redactedBannerCount');
+    if (!banner || !countEl) return;
+    const matches = code.match(/<REDACTED>/g);
+    const count = matches ? matches.length : 0;
+    if (count > 0) {
+      countEl.textContent = count;
+      banner.style.display = '';
+    } else {
+      banner.style.display = 'none';
     }
   }
 
@@ -260,10 +293,7 @@ class ResultViewer {
 
     const providerNames = {
       'lmstudio': 'LM Studio',
-      'ollama': 'Ollama',
-      'openai': 'OpenAI',
-      'gemini': 'Google Gemini',
-      'anthropic': 'Anthropic Claude'
+      'openrouter': 'OpenRouter'
     };
 
     const displayName = providerNames[provider] || provider;
@@ -396,7 +426,8 @@ function downloadCode() {
   }
 
   const format = viewer.sessionData.format || 'javascript';
-  const extension = format === 'python' ? 'py' : 'js';
+  // pytest is also a Python file — keep .py extension
+  const extension = (format === 'python' || format === 'pytest') ? 'py' : 'js';
   const filename = `playwright-test-${Date.now()}.${extension}`;
   
   const blob = new Blob([code], { type: 'text/plain' });
@@ -432,6 +463,16 @@ function exportSession() {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+
+// Phase 3.3: ensure temp/progress keys are cleaned even if the user closes the tab
+// before completeGeneration runs.
+window.addEventListener('beforeunload', () => {
+  try {
+    if (window.resultViewer && typeof window.resultViewer.cleanupTempKeys === 'function') {
+      window.resultViewer.cleanupTempKeys();
+    }
+  } catch (_) {}
+});
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {

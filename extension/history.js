@@ -100,7 +100,7 @@ class HistoryManager {
         const div = document.createElement('div');
         div.className = 'session-item';
         
-        const createdAt = new Date(session.createdAt).toLocaleString('zh-TW');
+        const createdAt = new Date(session.createdAt).toLocaleString('en-US');
         const stepsCount = session.steps ? session.steps.length : 0;
         const url = session.steps && session.steps.length > 0 ? session.steps[0].url : 'Unknown';
         
@@ -112,7 +112,7 @@ class HistoryManager {
                 </div>
                 <div class="session-badges">
                     <span class="badge badge-mode">${session.mode === 'step-by-step' ? 'Step-by-Step' : 'One-time'}</span>
-                    <span class="badge badge-format">${session.format === 'python' ? 'Python' : 'JavaScript'}</span>
+                    <span class="badge badge-format">${this.getFormatLabel(session.format)}</span>
                     <span class="badge badge-steps">${stepsCount} steps</span>
                     <span class="badge badge-llm">${this.getLLMBadgeText(session.llmProvider, session.llmModel)}</span>
                 </div>
@@ -153,6 +153,21 @@ class HistoryManager {
         `).join('') + (steps.length > 5 ? `<div class="step-item">... ${steps.length - 5} more steps</div>` : '');
     }
 
+    getFormatLabel(format) {
+        const labels = {
+            javascript: 'JavaScript',
+            python: 'Python',
+            pytest: 'Pytest'
+        };
+        return labels[format] || (format ? format.charAt(0).toUpperCase() + format.slice(1) : 'Unknown');
+    }
+
+    getFormatExtension(format) {
+        // pytest is also a Python file — keep .py extension
+        if (format === 'python' || format === 'pytest') return 'py';
+        return 'js';
+    }
+
     getLLMBadgeText(provider, model) {
         if (!provider) {
             return 'Unknown LLM';
@@ -160,18 +175,23 @@ class HistoryManager {
 
         const providerNames = {
             'lmstudio': 'LM Studio',
-            'ollama': 'Ollama',
-            'openai': 'OpenAI',
-            'gemini': 'Gemini',
-            'anthropic': 'Claude'
+            'openrouter': 'OpenRouter'
         };
 
         const displayName = providerNames[provider] || provider;
-        
+
         // For history list, show shorter names
         if (model && model !== 'lm-studio') {
             // Show abbreviated model names for space efficiency
-            const shortModel = model.replace('claude-', '').replace('gpt-', '').replace('gemini-', '');
+            const shortModel = model
+                .replace(/^anthropic\//, '')
+                .replace(/^openai\//, '')
+                .replace(/^google\//, '')
+                .replace(/^meta-llama\//, '')
+                .replace(/^deepseek\//, '')
+                .replace('claude-', '')
+                .replace('gpt-', '')
+                .replace('gemini-', '');
             return `${displayName} (${shortModel})`;
         }
         
@@ -276,7 +296,7 @@ class HistoryManager {
         if (!this.currentModal) return;
         
         const codeContent = document.getElementById('codeContent').querySelector('code').textContent;
-        const extension = this.currentModal.format === 'python' ? 'py' : 'js';
+        const extension = this.getFormatExtension(this.currentModal.format);
         const filename = `playwright-${this.currentModal.id}.${extension}`;
         
         this.downloadFile(codeContent, filename, 'text/plain');

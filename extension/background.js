@@ -269,6 +269,13 @@ class BackgroundService {
           sendResponse({ success: true });
           break;
 
+        case 'removeRecentStep':
+          // Phase 1.5: dblclick supersedes preceding click(s); content.js asks us to drop the
+          // most recent step from the canonical recording state.
+          this.removeRecentStep();
+          sendResponse({ success: true });
+          break;
+
         case 'ping':
           sendResponse({ status: 'ok', timestamp: Date.now() });
           break;
@@ -292,6 +299,24 @@ class BackgroundService {
     });
   }
 
+  async ensureContentReady(tabId) {
+    if (tabId == null) return false;
+    // Optimistic path: content script is already alive
+    const ready = await this.verifyScriptReady(tabId, 1).catch(() => false);
+    if (ready) return true;
+    // Otherwise force re-injection (handles orphan content scripts after extension reload,
+    // or pages that were open before the extension was installed).
+    try {
+      await this.forceInjectScripts(tabId);
+      // Give content-injector.js time to construct StepsRecorder and register its onMessage listener
+      await new Promise(resolve => setTimeout(resolve, 500));
+      return await this.verifyScriptReady(tabId, 3).catch(() => false);
+    } catch (e) {
+      console.error('ensureContentReady: force inject failed:', e);
+      return false;
+    }
+  }
+
   async startRecording(settings, tabId) {
     try {
       // Hard reset any stale state before starting
@@ -303,6 +328,9 @@ class BackgroundService {
         this.arrivalSeq = 0;
       }
 
+      // Make sure the target tab's content script can receive messages; force re-inject if not.
+      const contentReady = await this.ensureContentReady(tabId);
+
       this.recordingState = {
         isRecording: true,
         sessionId: `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -313,7 +341,7 @@ class BackgroundService {
         accumulatedCode: null
       };
 
-      return { success: true, sessionId: this.recordingState.sessionId };
+      return { success: true, sessionId: this.recordingState.sessionId, contentReady };
     } catch (error) {
       console.error('Error starting recording:', error);
       return { success: false, error: error.message };
@@ -390,6 +418,9 @@ class BackgroundService {
 
   async writeToTempFileAndOpenViewer(sessionData) {
     try {
+      // Phase 3.3: best-effort sweep of stale temp/progress keys (>1h old)
+      this.cleanupStaleTempKeys().catch(() => {});
+
       const tempSessionKey = `temp_session_${Date.now()}`;
       await chrome.storage.local.set({
         [tempSessionKey]: sessionData,
@@ -397,7 +428,7 @@ class BackgroundService {
       });
 
       const resultUrl = chrome.runtime.getURL(`result-viewer.html?sessionId=${sessionData.id}&temp=${tempSessionKey}`);
-      
+
       await chrome.tabs.create({
         url: resultUrl,
         active: true
@@ -413,10 +444,39 @@ class BackgroundService {
     }
   }
 
+  // Phase 3.3: scan storage for stale temp_session_* / progress_* keys older than 1 hour
+  async cleanupStaleTempKeys() {
+    try {
+      const all = await chrome.storage.local.get(null);
+      const now = Date.now();
+      const STALE_MS = 60 * 60 * 1000; // 1 hour
+      const staleKeys = [];
+      for (const key of Object.keys(all)) {
+        if (key.startsWith('temp_session_')) {
+          // Key format: temp_session_<timestamp>
+          const ts = parseInt(key.substring('temp_session_'.length), 10);
+          if (Number.isFinite(ts) && (now - ts) > STALE_MS) staleKeys.push(key);
+        } else if (key.startsWith('progress_')) {
+          // progress entries carry a timestamp field
+          const entry = all[key];
+          if (entry && typeof entry.timestamp === 'number' && (now - entry.timestamp) > STALE_MS) {
+            staleKeys.push(key);
+          }
+        }
+      }
+      if (staleKeys.length > 0) {
+        await chrome.storage.local.remove(staleKeys);
+      }
+    } catch (_) {
+      // best-effort, never throw
+    }
+  }
+
   async createDownloadableFile(sessionData) {
     try {
       const format = sessionData.format || 'javascript';
-      const extension = format === 'python' ? 'py' : 'js';
+      // pytest is also a Python file — keep .py extension
+      const extension = (format === 'python' || format === 'pytest') ? 'py' : 'js';
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const filename = `playwright-test-${timestamp}.${extension}`;
       
@@ -602,6 +662,30 @@ class BackgroundService {
     }
   }
 
+  // Phase 1.5: remove the most recent step (called when content.js detects a dblclick
+  // that supersedes a preceding click). Also drops a queued LLM call for that step
+  // if it's still pending in step-by-step mode.
+  removeRecentStep() {
+    if (!this.recordingState.isRecording) return;
+    if (this.recordingState.steps.length === 0) return;
+    this.recordingState.steps.pop();
+    // Reset arrivalSeq counter to keep gap-free indexing for subsequent steps
+    if (this.arrivalSeq > 0) this.arrivalSeq--;
+    // Drop the queued step (if any) for that same action
+    if (this.stepQueue.length > 0) {
+      this.stepQueue.pop();
+    }
+    // Refresh the visible counter on the top frame
+    try {
+      if (this.recordingState.tabId != null) {
+        chrome.tabs.sendMessage(this.recordingState.tabId, {
+          action: 'updateStepCounter',
+          count: this.recordingState.steps.length
+        }, { frameId: 0 });
+      }
+    } catch (_) {}
+  }
+
   updateAccumulatedCode(sessionId, code) {
     if (!this.recordingState.isRecording || this.recordingState.sessionId !== sessionId) {
       console.warn('Attempted to update accumulated code for inactive or different session');
@@ -651,7 +735,16 @@ class BackgroundService {
       text: step.text,
       label: step.label,
       attributes: step.attributes || {},
-      inIframe: step.inIframe || false
+      inIframe: step.inIframe || false,
+      // Phase 2 fields (carry through to LLM)
+      locatorHint: step.locatorHint || null,
+      boundingRect: step.boundingRect || null,
+      viewport: step.viewport || null,
+      scrollY: step.scrollY || 0,
+      frameAttributes: step.frameAttributes || null,
+      inShadowDom: step.inShadowDom || false,
+      shadowHost: step.shadowHost || null,
+      redactedReason: step.redactedReason || null
     };
     
     if (isFirstStep) {
@@ -663,11 +756,28 @@ class BackgroundService {
 Action (JSON):\n${JSON.stringify(stepPayload, null, 2)}
 
 Rules:
-1. Use Playwright locator best practices, prefer in order: getByRole(name), getByLabel, getByPlaceholder, getByTestId, getByText.
-2. If none of the above apply, use an XPath selector (prefix with xpath=). Only as a last resort, use a CSS selector. Never use nth-child unless absolutely necessary.
+1. The action JSON includes locatorHint = { strategy, args }. Prefer that strategy:
+   - testid → getByTestId(args.value)
+   - label → getByLabel(args.text)
+   - placeholder → getByPlaceholder(args.text)
+   - role-name → getByRole(args.role, { name: args.name })
+   - text → getByText(args.text)
+   - xpath → locator('xpath=' + args.expression)
+   - css → fall back to step.selector
+2. If you ignore locatorHint, fall back to: getByRole(name), getByLabel, getByPlaceholder, getByTestId, getByText, then XPath, then CSS. Never use nth-child unless absolutely necessary.
 3. Use async/await API with proper waits (waitForLoadState where needed).
 4. Return only runnable ${language} code, with NO comments or explanations.
-5. If the action is inside an iframe (inIframe=true), use frameLocator('iframe[src*="<host>"]') or its Python equivalent to scope operations to that frame.
+5. iframe scoping:
+   - If action.frameAttributes exists, prefer frameLocator('iframe[name="..."]') / [title="..."] / [id="..."] over URL matching.
+   - Else if inIframe=true, fall back to frameLocator('iframe[src*="<host>"]') (Python equivalent).
+6. If a step value is the literal string "<REDACTED>", emit fill('<REDACTED>') verbatim — do not invent a real password or env-var lookup.
+7. Action type mapping:
+   - "dblclick" → locator.dblclick()
+   - "contextmenu" → locator.click({ button: 'right' }) (Python: click(button="right"))
+   - "navigation" → page.goto(value) when URL differs from prior page; otherwise page.waitForURL(value).
+8. If boundingRect.top > viewport.height OR boundingRect.top < 0, prepend "await locator.scrollIntoViewIfNeeded()" (Python: scroll_into_view_if_needed) before the action.
+9. For "keydown", value may be a modifier-combined string like "Control+S" or "Meta+K"; pass it verbatim to keyboard.press() — do not split.
+10. For contenteditable elements (tagName not in input/textarea/select but value is non-empty), prefer locator.fill(value) for plain text, or locator.pressSequentially(value) when input order matters.
 
 ${isPytest ? `from playwright.sync_api import Page, expect
 
@@ -701,9 +811,12 @@ Generate the complete runnable code integrating the action using locator best pr
 Action (JSON):\n${JSON.stringify(stepPayload, null, 2)}
 
 Rules:
-1. Prefer: getByRole(name), getByLabel, getByPlaceholder, getByTestId, getByText.
-2. If those are not applicable, use an XPath selector (xpath=...). Only if XPath is not possible, use CSS. Never use nth-child.
-3. Return only ONE line of code with NO comments.`}
+1. Use action.locatorHint when present (strategy + args) to choose the locator; otherwise fall back to getByRole/Label/Placeholder/TestId/Text → XPath → CSS. Never use nth-child.
+2. Return only ONE line of code with NO comments. If a scrollIntoViewIfNeeded is required (boundingRect.top > viewport.height OR < 0), emit two lines: scroll then action.
+3. If value is the literal string "<REDACTED>", emit fill('<REDACTED>') verbatim — do not invent a real password.
+4. Action mapping: "dblclick" → locator.dblclick(); "contextmenu" → locator.click({ button: 'right' }) (Python: click(button="right")); "navigation" → page.goto(value) or page.waitForURL(value); "keydown" → keyboard.press(value) (value may be modifier-combined like "Control+S").
+5. For contenteditable elements use locator.fill(value) or locator.pressSequentially(value).
+6. If action.frameAttributes exists, scope via frameLocator('iframe[name="..."]') / [title] / [id]; else if inIframe=true, use frameLocator('iframe[src*="<host>"]').`}
 
     const storedSettings = await chrome.storage.sync.get(['provider', 'apiUrl', 'modelName', 'apiKey', 'temperature', 'maxTokens']);
     const provider = storedSettings.provider || 'lmstudio';
@@ -713,7 +826,7 @@ Rules:
     const temperature = storedSettings.temperature || 0.1;
 
     // Only require API key for cloud providers
-    const requiresKey = ['openai', 'gemini', 'anthropic'].includes(provider);
+    const requiresKey = ['openrouter'].includes(provider);
     if (requiresKey && !apiKey) {
       throw new Error(`API Key for ${provider} is not set. Please configure it in the extension settings.`);
     }
@@ -722,13 +835,16 @@ Rules:
     let requestBody;
 
     switch (provider) {
-      case 'openai':
       case 'lmstudio':
-      case 'ollama':
-        if (provider === 'openai' && apiKey) {
+      case 'openrouter':
+        if (apiKey) {
           headers['Authorization'] = `Bearer ${apiKey}`;
-        } else if (provider !== 'openai' && apiKey) {
-          headers['Authorization'] = `Bearer ${apiKey}`;
+        }
+        if (provider === 'openrouter') {
+          try {
+            headers['HTTP-Referer'] = `chrome-extension://${chrome.runtime.id}`;
+          } catch (_) {}
+          headers['X-Title'] = 'AI Steps Recorder';
         }
         requestBody = {
           model: modelName,
@@ -736,31 +852,6 @@ Rules:
           temperature: temperature,
           max_tokens: isFirstStep ? 1000 : 150,
           stream: false
-        };
-        break;
-      case 'gemini':
-        if (apiKey) {
-          apiUrl = apiUrl.includes('?') ? `${apiUrl}&key=${apiKey}` : `${apiUrl}?key=${apiKey}`;
-        }
-        requestBody = {
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: temperature,
-            maxOutputTokens: isFirstStep ? 1000 : 150,
-          },
-        };
-        break;
-      case 'anthropic':
-        if (apiKey) {
-          headers['x-api-key'] = apiKey;
-          headers['anthropic-version'] = '2023-06-01';
-          headers['anthropic-dangerous-direct-browser-access'] = 'true';
-        }
-        requestBody = {
-          model: modelName,
-          messages: [{ role: 'user', content: prompt }],
-          max_tokens: isFirstStep ? 1000 : 150,
-          temperature: temperature,
         };
         break;
       default:
@@ -842,28 +933,55 @@ Rules:
       label: step.label,
       attributes: step.attributes || {},
       inIframe: step.inIframe || false,
-      timestamp: step.timestamp
+      timestamp: step.timestamp,
+      // Phase 2 fields
+      locatorHint: step.locatorHint || null,
+      boundingRect: step.boundingRect || null,
+      viewport: step.viewport || null,
+      scrollY: step.scrollY || 0,
+      frameAttributes: step.frameAttributes || null,
+      inShadowDom: step.inShadowDom || false,
+      shadowHost: step.shadowHost || null,
+      redactedReason: step.redactedReason || null
     }));
     const mainUrl = (steps.find(s => s.type === 'navigation')?.value) || (steps[0]?.url) || '';
 
     const heading = isPytest
-      ? `基於以下步驟，生成可用於 pytest 的 Python Playwright 測試（sync API，使用 page fixture），並使用最佳化定位語法：`
-      : `基於以下網頁操作步驟（含元素屬性與可存取名稱），生成 ${language} Playwright 代碼，使用最佳化定位語法：`;
+      ? `Generate a complete Python Playwright pytest test (sync API, using the 'page' fixture) from the recorded steps below, using best-practice locators:`
+      : `Generate complete ${language} Playwright code from the recorded user actions below (including element attributes and accessible names), using best-practice locators:`;
     const prompt = `${heading}
 
-步驟（JSON）：\n${JSON.stringify(richSteps, null, 2)}
+Steps (JSON):
+${JSON.stringify(richSteps, null, 2)}
 
-主頁面 URL：${mainUrl}
+Main page URL: ${mainUrl}
 
-定位規則（重要，必須遵守）：
-1. 依序偏好使用 locator：getByRole({ name }), getByLabel, getByPlaceholder, getByTestId, getByText。
-2. 若上述皆不適用，改用 XPath 選擇器（以 xpath= 前綴）；只有在無法組出 XPath 時，才使用 CSS。禁止使用 nth-child（除非絕對必要）。
-3. 使用現代 Playwright 語法（async/await）。
-4. 第一個 URL 使用 page.goto() 並在必要時 waitForLoadState。
-5. 僅回傳完整可執行代碼，不要任何解釋或註解。
-6. 當步驟 inIframe=true（且步驟的 url 與主頁面不同）時，請使用 frameLocator('iframe[src*="<host>"]')（或 Python 等價 API）限定在該 iframe 內操作；<host> 請以該步驟 url 的網域關鍵字組成。
+Locator rules (important — follow strictly):
+1. Each step has locatorHint = { strategy, args }. Prefer that strategy:
+   - testid → getByTestId(args.value)
+   - label → getByLabel(args.text)
+   - placeholder → getByPlaceholder(args.text)
+   - role-name → getByRole(args.role, { name: args.name })
+   - text → getByText(args.text)
+   - xpath → locator('xpath=' + args.expression)
+   - css → fall back to step.selector
+2. If locatorHint is not applicable, fall back in this order: getByRole({ name }) → getByLabel → getByPlaceholder → getByTestId → getByText → XPath (xpath=) → CSS. Never use nth-child unless absolutely necessary.
+3. Use modern Playwright syntax (async/await).
+4. The first navigation URL must use page.goto(); add waitForLoadState when appropriate.
+5. Return only runnable code — no comments or explanations.
+6. iframe scoping:
+   - If the step has frameAttributes, prefer frameLocator('iframe[name="..."]') / [title="..."] / [id="..."] over URL matching.
+   - Otherwise, when inIframe=true, fall back to frameLocator('iframe[src*="<host>"]') (Python equivalent).
+7. If a step value is the literal string "<REDACTED>", emit fill('<REDACTED>') verbatim. Do not invent a real password or read environment variables.
+8. Action type mapping:
+   - type="dblclick" → locator.dblclick()
+   - type="contextmenu" → locator.click({ button: 'right' }) (Python: click(button="right"))
+   - type="navigation" → page.goto(value) if value differs from the prior page URL, otherwise page.waitForURL(value) to assert the SPA route change.
+   - type="keydown" → keyboard.press(value). value may be a modifier-combined string such as "Control+S" or "Meta+K"; pass it through verbatim, do not split.
+9. If boundingRect.top > viewport.height or < 0, prepend "await locator.scrollIntoViewIfNeeded()" (Python: scroll_into_view_if_needed) before the action.
+10. For contenteditable elements (tagName not in input/textarea/select but value is non-empty), use locator.fill(value) or locator.pressSequentially(value).
 
-    請嚴格按照以下骨架回應：
+    Respond strictly using this skeleton:
 
     ${language === 'Python' ? isPytest ? `from playwright.sync_api import Page, expect
 
@@ -875,7 +993,7 @@ async def run():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=False)
         page = await browser.new_page()
-        
+
         await browser.close()
 
 if __name__ == "__main__":
@@ -885,20 +1003,20 @@ if __name__ == "__main__":
     (async () => {
       const browser = await chromium.launch({ headless: false });
       const page = await browser.newPage();
-      
+
       await browser.close();
     })();
     `}
 
-要求：
-1. 使用現代 Playwright 語法
-2. 第一個 URL 使用 page.goto()
-3. 添加適當的等待 (waitForLoadState)
-4. 處理不同元素類型
-5. 只返回代碼，不要解釋
-6. 絕對不要在程式碼中包含任何註解
+Requirements:
+1. Use modern Playwright syntax.
+2. The first URL uses page.goto().
+3. Add appropriate waits (waitForLoadState).
+4. Handle different element types.
+5. Return code only, no explanations.
+6. Absolutely no comments inside the generated code.
 
-生成完整可執行的 ${language} 代碼：`;
+Output complete runnable ${language} code:`;
     
     // Progress: 30% - Loading AI settings
     if (sessionId) {
@@ -917,7 +1035,7 @@ if __name__ == "__main__":
     const temperature = storedSettings.temperature || 0.1;
 
     // Only require API key for cloud providers
-    const requiresKey = ['openai', 'gemini', 'anthropic'].includes(provider);
+    const requiresKey = ['openrouter'].includes(provider);
     if (requiresKey && !apiKey) {
       throw new Error(`API Key for ${provider} is not set. Please configure it in the extension settings.`);
     }
@@ -927,13 +1045,16 @@ if __name__ == "__main__":
     let finalApiUrl = apiUrl;
 
     switch (provider) {
-      case 'openai':
       case 'lmstudio':
-      case 'ollama':
-        if (provider === 'openai' && apiKey) {
+      case 'openrouter':
+        if (apiKey) {
           headers['Authorization'] = `Bearer ${apiKey}`;
-        } else if (provider !== 'openai' && apiKey) {
-          headers['Authorization'] = `Bearer ${apiKey}`;
+        }
+        if (provider === 'openrouter') {
+          try {
+            headers['HTTP-Referer'] = `chrome-extension://${chrome.runtime.id}`;
+          } catch (_) {}
+          headers['X-Title'] = 'AI Steps Recorder';
         }
         requestBody = {
           model: modelName,
@@ -941,31 +1062,6 @@ if __name__ == "__main__":
           temperature: temperature,
           max_tokens: 2000,
           stream: false
-        };
-        break;
-      case 'gemini':
-        if (apiKey) {
-          finalApiUrl = apiUrl.includes('?') ? `${apiUrl}&key=${apiKey}` : `${apiUrl}?key=${apiKey}`;
-        }
-        requestBody = {
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: temperature,
-            maxOutputTokens: 2000,
-          },
-        };
-        break;
-      case 'anthropic':
-        if (apiKey) {
-          headers['x-api-key'] = apiKey;
-          headers['anthropic-version'] = '2023-06-01';
-          headers['anthropic-dangerous-direct-browser-access'] = 'true';
-        }
-        requestBody = {
-          model: modelName,
-          messages: [{ role: 'user', content: prompt }],
-          max_tokens: 2000,
-          temperature: temperature,
         };
         break;
       default:
@@ -1001,11 +1097,11 @@ if __name__ == "__main__":
     }
 
     if (!response.ok) {
-      const errorText = await response.text().catch(() => '無法讀取錯誤');
+      const errorText = await response.text().catch(() => 'Could not read error response');
       console.error('=== BACKGROUND LLM ERROR ===');
       console.error('Status:', response.status);
       console.error('Error text:', errorText);
-      throw new Error(`${provider} 連接失敗 (${response.status}): ${errorText}`);
+      throw new Error(`${provider} connection failed (${response.status}): ${errorText}`);
     }
 
     const raw = await this.readLLMContent(response, provider);
@@ -1066,27 +1162,13 @@ if __name__ == "__main__":
   extractContentFromLLMJson(data, provider) {
     try {
       switch (provider) {
-        case 'openai':
         case 'lmstudio':
-        case 'ollama':
+        case 'openrouter':
           if (Array.isArray(data.choices) && data.choices.length > 0) {
             const c0 = data.choices[0];
             if (c0.message && typeof c0.message.content === 'string') return c0.message.content;
             if (typeof c0.text === 'string') return c0.text;
             if (c0.delta && typeof c0.delta.content === 'string') return c0.delta.content;
-          }
-          break;
-        case 'gemini':
-          if (Array.isArray(data.candidates) && data.candidates.length > 0) {
-            const c0 = data.candidates[0];
-            if (c0.content && Array.isArray(c0.content.parts) && c0.content.parts.length > 0) {
-              if (typeof c0.content.parts[0].text === 'string') return c0.content.parts[0].text;
-            }
-          }
-          break;
-        case 'anthropic':
-          if (Array.isArray(data.content) && data.content.length > 0) {
-            if (typeof data.content[0].text === 'string') return data.content[0].text;
           }
           break;
       }
@@ -1105,30 +1187,14 @@ if __name__ == "__main__":
       try {
         const obj = JSON.parse(payload);
         switch (provider) {
-          case 'openai':
-        case 'lmstudio':
-        case 'ollama':
+          case 'lmstudio':
+          case 'openrouter':
             if (Array.isArray(obj.choices)) {
               for (const ch of obj.choices) {
                 if (ch.delta && typeof ch.delta.content === 'string') acc += ch.delta.content;
                 else if (ch.message && typeof ch.message.content === 'string') acc += ch.message.content;
                 else if (typeof ch.text === 'string') acc += ch.text;
               }
-            }
-            break;
-          case 'gemini':
-            if (Array.isArray(obj.candidates) && obj.candidates.length > 0) {
-              const c0 = obj.candidates[0];
-              if (c0.content && Array.isArray(c0.content.parts) && c0.content.parts.length > 0) {
-                if (typeof c0.content.parts[0].text === 'string') acc += c0.content.parts[0].text;
-              }
-            }
-            break;
-          case 'anthropic':
-            if (obj.type === 'content_block_delta' && typeof obj.delta.text === 'string') {
-              acc += obj.delta.text;
-            } else if (obj.type === 'content_block_start' && typeof obj.content_block.text === 'string') {
-              acc += obj.content_block.text;
             }
             break;
         }
@@ -1198,25 +1264,59 @@ def test_ai_steps_recorder(page: Page):
       const tag = (step.tagName || '').toLowerCase();
       const type = txt(attrs['type']) || '';
 
+      const isPython = (language === 'python' || language === 'pytest');
+
+      // Phase 2.3: prefer step.locatorHint when present (computed at recording time)
+      const fromHint = () => {
+        const hint = step.locatorHint;
+        if (!hint || !hint.strategy) return null;
+        const a = hint.args || {};
+        switch (hint.strategy) {
+          case 'testid':
+            return isPython ? `page.get_by_test_id(${q(a.value)})` : `page.getByTestId(${q(a.value)})`;
+          case 'label':
+            return isPython ? `page.get_by_label(${q(a.text)})` : `page.getByLabel(${q(a.text)})`;
+          case 'placeholder':
+            return isPython ? `page.get_by_placeholder(${q(a.text)})` : `page.getByPlaceholder(${q(a.text)})`;
+          case 'role-name':
+            return isPython
+              ? `page.get_by_role(${q(a.role)}, name=${q(a.name)})`
+              : `page.getByRole(${q(a.role)}, { name: ${q(a.name)} })`;
+          case 'text':
+            return isPython ? `page.get_by_text(${q(a.text)})` : `page.getByText(${q(a.text)})`;
+          case 'xpath':
+            return `page.locator(${q('xpath=' + a.expression)})`;
+          case 'css':
+            // signal to fall through to existing in-fn fallback
+            return null;
+          default:
+            return null;
+        }
+      };
+
       const buildLocator = () => {
         if (step.type === 'navigation') return null;
-        // Best-practice Playwright locators
-        if (testId) return (language === 'python' || language === 'pytest') ? `page.get_by_test_id(${q(testId)})` : `page.getByTestId(${q(testId)})`;
+        // Phase 2.3: use precomputed hint if available
+        const hinted = fromHint();
+        if (hinted) return hinted;
+
+        // Best-practice Playwright locators (legacy path for sessions without locatorHint)
+        if (testId) return isPython ? `page.get_by_test_id(${q(testId)})` : `page.getByTestId(${q(testId)})`;
         if (['input', 'textarea', 'select'].includes(tag)) {
-          if (label) return (language === 'python' || language === 'pytest') ? `page.get_by_label(${q(label)})` : `page.getByLabel(${q(label)})`;
-          if (placeholder) return (language === 'python' || language === 'pytest') ? `page.get_by_placeholder(${q(placeholder)})` : `page.getByPlaceholder(${q(placeholder)})`;
+          if (label) return isPython ? `page.get_by_label(${q(label)})` : `page.getByLabel(${q(label)})`;
+          if (placeholder) return isPython ? `page.get_by_placeholder(${q(placeholder)})` : `page.getByPlaceholder(${q(placeholder)})`;
         }
         const name = label || text;
         if (['button'].includes(tag) || (tag === 'input' && ['button','submit','reset'].includes(type))) {
-          if (name) return (language === 'python' || language === 'pytest') ? `page.get_by_role("button", name=${q(name)})` : `page.getByRole('button', { name: ${q(name)} })`;
+          if (name) return isPython ? `page.get_by_role("button", name=${q(name)})` : `page.getByRole('button', { name: ${q(name)} })`;
         }
         if (tag === 'a') {
-          if (name) return (language === 'python' || language === 'pytest') ? `page.get_by_role("link", name=${q(name)})` : `page.getByRole('link', { name: ${q(name)} })`;
+          if (name) return isPython ? `page.get_by_role("link", name=${q(name)})` : `page.getByRole('link', { name: ${q(name)} })`;
         }
         if (roleAttr && name) {
-          return (language === 'python' || language === 'pytest') ? `page.get_by_role(${q(roleAttr)}, name=${q(name)})` : `page.getByRole(${q(roleAttr)}, { name: ${q(name)} })`;
+          return isPython ? `page.get_by_role(${q(roleAttr)}, name=${q(name)})` : `page.getByRole(${q(roleAttr)}, { name: ${q(name)} })`;
         }
-        if (text) return (language === 'python' || language === 'pytest') ? `page.get_by_text(${q(text)})` : `page.getByText(${q(text)})`;
+        if (text) return isPython ? `page.get_by_text(${q(text)})` : `page.getByText(${q(text)})`;
 
         // XPath fallback (if no specialized locator available)
         const idAttr = txt(attrs['id']) || '';
@@ -1244,6 +1344,22 @@ def test_ai_steps_recorder(page: Page):
         case 'click': {
           if (!locator) break;
           const line = language === 'python' ? `await ${locator}.click()` : language === 'pytest' ? `${locator}.click()` : `await ${locator}.click();`;
+          code += `${indent}${line}\n`;
+          break;
+        }
+        case 'dblclick': {
+          if (!locator) break;
+          const line = language === 'python' ? `await ${locator}.dblclick()` : language === 'pytest' ? `${locator}.dblclick()` : `await ${locator}.dblclick();`;
+          code += `${indent}${line}\n`;
+          break;
+        }
+        case 'contextmenu': {
+          if (!locator) break;
+          const line = language === 'python'
+            ? `await ${locator}.click(button="right")`
+            : language === 'pytest'
+              ? `${locator}.click(button="right")`
+              : `await ${locator}.click({ button: 'right' });`;
           code += `${indent}${line}\n`;
           break;
         }
@@ -1463,7 +1579,8 @@ if __name__ == "__main__":
         filename = `ai-steps-${sessionId}.json`;
       } else if (format === 'playwright') {
         content = session.playwrightCode || 'No Playwright code generated';
-        const ext = session.format === 'python' ? 'py' : 'js';
+        // pytest is also a Python file — keep .py extension
+        const ext = (session.format === 'python' || session.format === 'pytest') ? 'py' : 'js';
         filename = `playwright-test-${sessionId}.${ext}`;
       }
 

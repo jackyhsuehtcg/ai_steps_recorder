@@ -10,7 +10,9 @@ Record real user interactions in the browser and generate Playwright test script
 - Smart element targeting and common actions (click, input, keys, submit, navigation, scroll, etc.)
 - Works across iframes; draggable in-page recorder controls
 - History, settings, and result viewer pages with a clear progress bar for One‑Time mode
-- Pluggable AI backends: LM Studio, Ollama, OpenAI, Google Gemini, Anthropic
+- Two AI backends, both OpenAI‑compatible:
+  - **LM Studio** (local) — also works for any OpenAI‑compatible local server (e.g. Ollama) by changing the API URL
+  - **OpenRouter** (cloud aggregator) — single API key, routes to Claude / GPT / Gemini / Llama / DeepSeek and more
 
 ## Install (Load Unpacked)
 1. Clone the repo and open the folder:
@@ -22,14 +24,15 @@ Record real user interactions in the browser and generate Playwright test script
 
 ## Configure AI Provider
 Open the extension’s “AI Settings” (options page) and set:
-- Provider: LM Studio, Ollama, OpenAI, Google Gemini, or Anthropic
+- Provider: **LM Studio** or **OpenRouter**
 - API URL (examples)
-  - LM Studio: `http://localhost:1234/v1/chat/completions`
-  - Ollama: `http://localhost:11434/v1/chat/completions`
-  - OpenAI: `https://api.openai.com/v1/chat/completions`
-  - Gemini: `https://generativelanguage.googleapis.com/v1beta/models/...:generateContent`
-  - Anthropic: `https://api.anthropic.com/v1/messages`
-- Model name, Temperature, Max tokens, and API key (if required)
+  - LM Studio (default): `http://localhost:1234/v1/chat/completions`
+  - LM Studio pointed at Ollama: `http://localhost:11434/v1/chat/completions`
+  - OpenRouter: `https://openrouter.ai/api/v1/chat/completions`
+- Model name
+  - LM Studio: pick from the dropdown of installed local models
+  - OpenRouter: free‑form text input with autocomplete suggestions; type any model id supported by OpenRouter (e.g. `anthropic/claude-sonnet-4`, `openai/gpt-5`, `google/gemini-2.5-flash`)
+- Temperature, Max tokens, and API key (required for OpenRouter only)
 
 ## Usage
 1. Click the toolbar icon to open the popup.
@@ -50,7 +53,7 @@ Open the extension’s “AI Settings” (options page) and set:
 - `activeTab`, `scripting`, `tabs`: inject recorder and read page context as needed
 - `storage`: store settings and recording sessions
 - `clipboardWrite`: copy generated code
-- Host permissions include localhost (LM Studio/Ollama) and major AI APIs
+- Host permissions: `http://localhost:1234/*` (LM Studio default), `https://openrouter.ai/*`, plus generic `http://*/*` and `https://*/*` so the recorder can run on any site (and also lets LM Studio be pointed at other local OpenAI‑compatible endpoints such as Ollama on `localhost:11434`)
 
 ## Development
 Project structure (simplified):
@@ -84,7 +87,9 @@ AI 協助的瀏覽器操作錄製工具，可將實際操作自動轉換為 Play
 - 智慧選擇器與常見操作（點擊、輸入、鍵盤、提交、導航、滾動…）
 - 支援 iframe，含可拖移控制列
 - 歷史、設定、結果檢視頁面；一次錄製模式提供「全寬且更顯眼」的進度條
-- 支援多家 AI：LM Studio、Ollama、OpenAI、Google Gemini、Anthropic
+- 兩個 AI 後端，皆採 OpenAI 相容協定：
+  - **LM Studio**（本地）— 也可以把 API URL 指到任何 OpenAI 相容本地伺服器（如 Ollama）
+  - **OpenRouter**（雲端聚合）— 一把 Key 路由到 Claude / GPT / Gemini / Llama / DeepSeek 等多家模型
 
 ## 安裝（載入未封裝）
 1. 下載專案並開啟資料夾：
@@ -96,11 +101,15 @@ AI 協助的瀏覽器操作錄製工具，可將實際操作自動轉換為 Play
 
 ## 設定 AI
 在「AI 設定」頁面填寫：
-- 供應商：LM Studio / Ollama / OpenAI / Google Gemini / Anthropic
-- API URL（例如）
-  - LM Studio：`http://localhost:1234/v1/chat/completions`
-  - Ollama：`http://localhost:11434/v1/chat/completions`
-- 模型名稱、Temperature、Max tokens、API Key（如需）
+- 供應商：**LM Studio** 或 **OpenRouter**
+- API URL（範例）
+  - LM Studio（預設）：`http://localhost:1234/v1/chat/completions`
+  - LM Studio 指向 Ollama：`http://localhost:11434/v1/chat/completions`
+  - OpenRouter：`https://openrouter.ai/api/v1/chat/completions`
+- 模型名稱
+  - LM Studio：從下拉選單挑選已載入的本地模型
+  - OpenRouter：自由文字輸入欄（含自動完成建議），可填任何 OpenRouter 支援的模型字串，例如 `anthropic/claude-sonnet-4`、`openai/gpt-5`、`google/gemini-2.5-flash`
+- Temperature、Max tokens、API Key（OpenRouter 必填，LM Studio 不需要）
 
 ## 使用流程
 1. 點擊工具列圖示開啟彈出視窗
@@ -115,7 +124,7 @@ AI 協助的瀏覽器操作錄製工具，可將實際操作自動轉換為 Play
 - `activeTab`、`scripting`、`tabs`：注入錄製器、存取必要的頁面資訊
 - `storage`：儲存設定與錄製紀錄
 - `clipboardWrite`：複製產生的代碼
-- 主機權限包含本機端點與主流雲端 AI 服務
+- 主機權限：`http://localhost:1234/*`（LM Studio 預設）、`https://openrouter.ai/*`，以及通用的 `http://*/*` / `https://*/*`（讓錄製器可在任意網站運作；同時也讓 LM Studio 欄位可改指向其他本地 OpenAI 相容端點，例如 `localhost:11434` 上的 Ollama）
 
 ## 開發
 不需建置流程，直接修改檔案並在擴充功能頁面重新載入即可。主要檔案：

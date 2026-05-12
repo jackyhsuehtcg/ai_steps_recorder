@@ -4,34 +4,35 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AI Steps Recorder</title>
+  <link rel="stylesheet" href="design-tokens.css">
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
   <div class="container">
     <h1 class="title">AI Steps Recorder</h1>
-    
-    <div class="mode-selection">
-      <h2>Recording Mode</h2>
+
+    <section class="card">
+      <h2>Mode</h2>
       <div class="mode-options">
         <label class="mode-option">
           <input type="radio" name="recordMode" value="step-by-step" checked>
           <span class="mode-label">
             <strong>Step-by-Step</strong>
-            <small>Generate Playwright script in real-time</small>
+            <small>Real-time generation</small>
           </span>
         </label>
         <label class="mode-option">
           <input type="radio" name="recordMode" value="one-time">
           <span class="mode-label">
-            <strong>One-time Recording</strong>
-            <small>Generate script after completion</small>
+            <strong>One-time</strong>
+            <small>Batch at end</small>
           </span>
         </label>
       </div>
-    </div>
+    </section>
 
-    <div class="output-format">
-      <h2>Output Format</h2>
+    <section class="card">
+      <h2>Output</h2>
       <div class="format-options">
         <label class="format-option">
           <input type="radio" name="outputFormat" value="javascript" checked>
@@ -46,25 +47,24 @@
           <span>Pytest</span>
         </label>
       </div>
-    </div>
+    </section>
 
-    <div class="current-llm">
-      <h2>Current AI Model</h2>
+    <div class="meta-row">
       <div class="llm-info">
         <span class="llm-provider" id="currentProvider">Loading...</span>
+        <span class="llm-sep">·</span>
         <span class="llm-model" id="currentModel"></span>
+      </div>
+      <div class="status" id="status">
+        <span class="status-indicator"></span>
+        <span class="status-text">Ready</span>
       </div>
     </div>
 
     <div class="actions">
       <button id="startRecording" class="btn btn-primary">Start Recording</button>
-      <button id="viewHistory" class="btn btn-secondary">View History</button>
-      <button id="openSettings" class="btn btn-settings">AI Settings</button>
-    </div>
-
-    <div class="status" id="status">
-      <span class="status-indicator"></span>
-      <span class="status-text">Ready</span>
+      <button id="viewHistory" class="btn btn-secondary">History</button>
+      <button id="openSettings" class="btn btn-settings">Settings</button>
     </div>
   </div>
 

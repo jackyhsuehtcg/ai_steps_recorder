@@ -3,57 +3,58 @@
 <head>
     <meta charset="UTF-8">
     <title>AI Steps Recorder - Recording Result</title>
+    <link rel="stylesheet" href="design-tokens.css">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            background: #f8f9fa;
+            background: var(--bg-base);
+            color: var(--text-primary);
+            font-family: var(--font-sans);
+            min-height: 100vh;
         }
 
         .container {
-            max-width: 1200px;
+            max-width: 1080px;
             margin: 0 auto;
-            padding: 20px;
+            padding: 32px 24px 48px;
         }
 
+        /* === Header === */
         .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 20px;
-            border-radius: 12px;
-            margin-bottom: 20px;
             text-align: center;
+            margin-bottom: 24px;
+            padding: 18px 0;
+            border-bottom: 1px solid var(--border-subtle);
         }
 
         .header h1 {
-            font-size: 24px;
-            margin-bottom: 8px;
+            font-family: var(--font-mono);
+            font-size: 22px;
+            font-weight: 600;
+            color: var(--accent);
+            letter-spacing: -0.01em;
+            margin-bottom: 4px;
         }
 
         .header .subtitle {
-            opacity: 0.9;
-            font-size: 14px;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--text-muted);
+            letter-spacing: 0.04em;
         }
 
+        /* === Session info === */
         .session-info {
-            background: white;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            background: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            padding: 22px;
+            margin-bottom: 18px;
         }
 
         .info-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
+            gap: 14px 24px;
         }
 
         .info-item {
@@ -66,59 +67,93 @@
         }
 
         .info-label {
-            font-size: 12px;
-            color: #666;
+            font-family: var(--font-mono);
+            font-size: 10px;
+            color: var(--text-muted);
             text-transform: uppercase;
+            letter-spacing: 0.08em;
             font-weight: 600;
-            margin-bottom: 4px;
+            margin-bottom: 5px;
         }
 
         .info-value {
-            font-size: 14px;
+            font-family: var(--font-mono);
+            font-size: 13px;
+            color: var(--text-primary);
             font-weight: 500;
-            word-break: break-all; /* Keep this for safety */
+            word-break: break-all;
         }
 
+        /* === Code section === */
         .code-section {
-            background: white;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            background: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            margin-bottom: 18px;
             overflow: hidden;
         }
 
         .code-header {
-            background: #f8f9fa;
-            padding: 15px 20px;
-            border-bottom: 1px solid #dee2e6;
+            background: var(--bg-elevated);
+            padding: 12px 18px;
+            border-bottom: 1px solid var(--border-subtle);
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
 
         .code-title {
+            font-family: var(--font-mono);
+            font-size: 11px;
             font-weight: 600;
-            color: #495057;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .redacted-banner {
+            margin: 14px 22px 0;
+            padding: 12px 16px;
+            background: var(--warning-bg);
+            border: 1px solid var(--warning-border);
+            border-left: 3px solid var(--warning);
+            border-radius: var(--radius-md);
+            color: var(--warning);
+            font-size: 13px;
+            line-height: 1.5;
+        }
+        .redacted-banner code {
+            background: rgba(201, 168, 108, 0.18);
+            color: var(--warning);
+            padding: 1px 5px;
+            border-radius: var(--radius-sm);
+            font-family: var(--font-mono);
+            font-size: 12px;
+            border: 1px solid rgba(201, 168, 108, 0.25);
         }
 
         .copy-btn {
-            background: #28a745;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 4px;
-            font-size: 12px;
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1px solid var(--border-default);
+            padding: 7px 14px;
+            border-radius: var(--radius-md);
+            font-family: var(--font-mono);
+            font-size: 11px;
             font-weight: 500;
             cursor: pointer;
-            transition: background-color 0.2s;
+            transition: all var(--transition-fast);
         }
 
         .copy-btn:hover {
-            background: #218838;
+            border-color: var(--accent);
+            color: var(--accent);
         }
 
         .copy-btn.copied {
-            background: #17a2b8;
+            background: var(--success);
+            color: var(--bg-base);
+            border-color: var(--success);
         }
 
         .code-content {
@@ -126,14 +161,14 @@
         }
 
         .code-block {
-            background: #f8f9fa;
+            background: var(--bg-base);
             border: none;
-            padding: 20px;
-            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-            font-size: 13px;
-            line-height: 1.5;
+            padding: 18px;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            line-height: 1.65;
             white-space: pre-wrap;
-            color: #495057;
+            color: var(--text-primary);
             resize: none;
             width: 100%;
             min-height: 400px;
@@ -143,28 +178,33 @@
 
         .code-block:focus {
             outline: none;
-            background: #fff;
+            background: var(--bg-base);
         }
 
+        /* === Steps section === */
         .steps-section {
-            background: white;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            background: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            padding: 22px;
+            margin-bottom: 18px;
         }
 
         .steps-title {
+            font-family: var(--font-mono);
+            font-size: 11px;
             font-weight: 600;
-            margin-bottom: 15px;
-            color: #495057;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 14px;
         }
 
         .step-item {
             display: flex;
             align-items: center;
-            padding: 8px 0;
-            border-bottom: 1px solid #f1f3f4;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border-subtle);
         }
 
         .step-item:last-child {
@@ -172,17 +212,19 @@
         }
 
         .step-number {
-            background: #667eea;
-            color: white;
-            width: 24px;
-            height: 24px;
-            border-radius: 12px;
+            background: var(--bg-elevated);
+            color: var(--accent);
+            border: 1px solid var(--border-default);
+            width: 26px;
+            height: 26px;
+            border-radius: var(--radius-pill);
             display: flex;
             align-items: center;
             justify-content: center;
+            font-family: var(--font-mono);
             font-size: 11px;
             font-weight: 600;
-            margin-right: 12px;
+            margin-right: 14px;
             flex-shrink: 0;
         }
 
@@ -191,197 +233,215 @@
         }
 
         .step-type {
-            font-weight: 500;
-            color: #495057;
+            font-family: var(--font-mono);
+            font-weight: 600;
+            color: var(--accent);
             text-transform: uppercase;
-            font-size: 11px;
+            font-size: 10px;
+            letter-spacing: 0.08em;
         }
 
         .step-description {
-            font-size: 13px;
-            color: #6c757d;
-            margin-top: 2px;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 3px;
             overflow-wrap: break-word;
             word-break: break-all;
         }
 
+        /* === Action buttons === */
         .actions {
             display: flex;
             gap: 10px;
             justify-content: center;
-            margin-top: 20px;
+            margin-top: 24px;
         }
 
         .action-btn {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 6px;
-            font-size: 14px;
+            font-family: var(--font-mono);
+            font-size: 12px;
             font-weight: 500;
+            padding: 10px 18px;
+            border: 1px solid transparent;
+            border-radius: var(--radius-md);
             cursor: pointer;
-            transition: all 0.2s;
+            transition: all var(--transition-normal);
             text-decoration: none;
-            display: inline-block;
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
         }
 
         .btn-primary {
-            background: #007bff;
-            color: white;
+            background: var(--accent);
+            color: var(--bg-base);
+            border-color: var(--accent);
+            font-weight: 600;
         }
-
         .btn-primary:hover {
-            background: #0056b3;
+            background: var(--accent-hover);
+            box-shadow: var(--shadow-md), var(--shadow-glow);
+            transform: translateY(-1px);
         }
 
         .btn-secondary {
-            background: #6c757d;
-            color: white;
+            background: var(--bg-elevated);
+            color: var(--text-secondary);
+            border-color: var(--border-default);
         }
-
         .btn-secondary:hover {
-            background: #545b62;
+            border-color: var(--accent);
+            color: var(--accent);
         }
 
         .btn-success {
-            background: #28a745;
-            color: white;
+            background: transparent;
+            color: var(--success);
+            border-color: var(--success-border);
         }
-
         .btn-success:hover {
-            background: #218838;
+            background: var(--success-bg);
+            border-color: var(--success);
         }
 
+        /* === Loading / generating / error / empty === */
         .loading {
             text-align: center;
-            padding: 40px;
+            padding: 48px 20px;
+            color: var(--text-muted);
+            font-family: var(--font-mono);
+            font-size: 13px;
         }
 
         .loading-spinner {
             display: inline-block;
-            width: 40px;
-            height: 40px;
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #667eea;
+            width: 36px;
+            height: 36px;
+            border: 3px solid var(--border-subtle);
+            border-top-color: var(--accent);
             border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-bottom: 15px;
+            animation: spin 0.7s linear infinite;
+            margin-bottom: 14px;
         }
 
         @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            to { transform: rotate(360deg); }
         }
 
         @keyframes progressStripes {
-            0% { background-position: 0 0, 0 0; }
-            100% { background-position: 30px 0, 0 0; }
+            0% { background-position: 0 0; }
+            100% { background-position: 30px 0; }
         }
 
         .error {
-            background: #f8d7da;
-            color: #721c24;
-            padding: 15px;
-            border-radius: 6px;
-            margin: 20px 0;
-            border: 1px solid #f5c6cb;
+            background: var(--error-bg);
+            color: var(--error);
+            padding: 14px 18px;
+            border-radius: var(--radius-md);
+            margin: 18px 0;
+            border: 1px solid var(--error-border);
+            font-family: var(--font-mono);
+            font-size: 13px;
         }
 
         .empty-state {
             text-align: center;
-            padding: 40px;
-            color: #6c757d;
+            padding: 48px 20px;
+            color: var(--text-muted);
+            font-family: var(--font-mono);
         }
 
         .empty-state-icon {
-            font-size: 48px;
-            margin-bottom: 15px;
-            opacity: 0.5;
+            font-size: 44px;
+            margin-bottom: 14px;
+            opacity: 0.4;
         }
 
         .generating {
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding: 40px 20px;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            margin: 20px 0;
+            padding: 40px 24px;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-md);
+            margin: 18px 0;
         }
 
         .generate-spinner {
-            width: 50px;
-            height: 50px;
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #667eea;
+            width: 46px;
+            height: 46px;
+            border: 3px solid var(--border-subtle);
+            border-top-color: var(--accent);
             border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-bottom: 20px;
+            animation: spin 0.7s linear infinite;
+            margin-bottom: 22px;
         }
 
         .generate-status {
             text-align: center;
             width: 100%;
-            /* Stretch to container width for better visibility */
             max-width: none;
         }
 
         .generate-title {
-            font-size: 18px;
+            font-family: var(--font-mono);
+            font-size: 14px;
             font-weight: 600;
-            color: #333;
-            margin-bottom: 20px;
+            color: var(--text-primary);
+            margin-bottom: 18px;
+            letter-spacing: 0.04em;
         }
 
         .progress-container {
-            margin-bottom: 16px;
+            margin-bottom: 14px;
             width: 100%;
         }
 
         .progress-bar {
             width: 100%;
-            height: 14px;
-            background: #eef1f4;
-            border-radius: 9999px;
+            height: 12px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-pill);
             overflow: hidden;
             margin-bottom: 10px;
-            box-shadow: inset 0 1px 2px rgba(0,0,0,0.06);
-            border: 1px solid #e0e6ed;
         }
 
         .progress-fill {
             height: 100%;
-            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-            /* Subtle animated stripes for clarity */
-            background-image:
+            background:
               repeating-linear-gradient(
                 -45deg,
-                rgba(255,255,255,0.15) 0,
-                rgba(255,255,255,0.15) 8px,
-                rgba(255,255,255,0.05) 8px,
-                rgba(255,255,255,0.05) 16px
+                rgba(0, 0, 0, 0.18) 0,
+                rgba(0, 0, 0, 0.18) 8px,
+                transparent 8px,
+                transparent 16px
               ),
-              linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+              linear-gradient(90deg, var(--accent) 0%, var(--accent-hover) 100%);
             background-size: 30px 30px, auto;
             animation: progressStripes 1.2s linear infinite;
-            border-radius: 9999px;
+            border-radius: var(--radius-pill);
             transition: width 0.3s ease;
             width: 0%;
-            box-shadow: inset 0 -1px 0 rgba(0,0,0,0.08);
         }
 
         .progress-text {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            font-size: 14px;
-            color: #495057;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--text-secondary);
             font-weight: 500;
         }
 
         .generate-details {
-            font-size: 13px;
-            color: #999;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--text-muted);
             line-height: 1.4;
         }
     </style>
@@ -454,6 +514,9 @@
                 <div class="code-header">
                     <div class="code-title">Generated Playwright Code</div>
                     <button class="copy-btn" id="copyCodeBtn">Copy Code</button>
+                </div>
+                <div id="redactedBanner" class="redacted-banner" style="display:none;">
+                    ⚠ Contains <span id="redactedBannerCount">0</span> redacted placeholder(s) (<code>&lt;REDACTED&gt;</code>). Replace with real values or environment variables before running.
                 </div>
                 <div class="code-content">
                     <textarea id="playwrightCode" class="code-block" readonly placeholder="No Playwright code generated..."></textarea>

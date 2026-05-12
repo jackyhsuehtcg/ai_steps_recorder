@@ -71,20 +71,20 @@ class PopupController {
 
   async updateStatus() {
     try {
-      // 首先檢查 background script 的錄製狀態
+      // First check the background script's recording state
       const recordingStateResponse = await chrome.runtime.sendMessage({ action: 'getRecordingState' });
-      
+
       if (recordingStateResponse?.success && recordingStateResponse.state?.isRecording) {
         this.setStatus('Recording...', 'recording');
         this.startRecordingBtn.textContent = 'Stop Recording';
         this.startRecordingBtn.classList.add('btn-danger');
         return;
       }
-      
-      // 如果 background script 沒有錄製狀態，檢查當前 tab 的 content script
+
+      // Otherwise probe the active tab's content script
       const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
       const tab = tabs[0];
-      
+
       if (!tab) {
         this.setStatus('Cannot get current page', 'error');
         return;
@@ -92,10 +92,10 @@ class PopupController {
 
       try {
         const response = await chrome.tabs.sendMessage(tab.id, { action: 'getStatus' });
-        
+
         if (response && response.isRecording) {
-          this.setStatus('正在錄製中...', 'recording');
-          this.startRecordingBtn.textContent = '停止錄製';
+          this.setStatus('Recording...', 'recording');
+          this.startRecordingBtn.textContent = 'Stop Recording';
           this.startRecordingBtn.classList.add('btn-danger');
         } else {
           this.setStatus('Ready', 'ready');
@@ -103,7 +103,7 @@ class PopupController {
           this.startRecordingBtn.classList.remove('btn-danger');
         }
       } catch (error) {
-        // Content script 可能尚未載入
+        // Content script may not yet be injected
         this.setStatus('Ready', 'ready');
         this.startRecordingBtn.textContent = 'Start Recording';
         this.startRecordingBtn.classList.remove('btn-danger');
@@ -154,6 +154,15 @@ class PopupController {
             // Not recording, so start it
             const startResponse = await chrome.runtime.sendMessage({ action: 'startRecording', settings: settings, tabId: tab.id });
             if (startResponse?.success) {
+                if (startResponse.contentReady === false) {
+                    // Content script can't be injected here (chrome://, Web Store, extension-protected pages, etc.)
+                    this.setStatus('Cannot inject recorder into this page (try a normal http(s) page)', 'error');
+                    // Roll back the recording state we just created so background and UI stay in sync
+                    await chrome.runtime.sendMessage({ action: 'stopRecording' }).catch(() => {});
+                    this.startRecordingBtn.textContent = 'Start Recording';
+                    this.startRecordingBtn.classList.remove('btn-danger');
+                    return;
+                }
                 this.setStatus('Starting recording...', 'recording');
                 this.startRecordingBtn.textContent = 'Stop Recording';
                 this.startRecordingBtn.classList.add('btn-danger');
@@ -188,10 +197,7 @@ class PopupController {
   updateCurrentLLMDisplay(provider, modelName) {
     const providerNames = {
       'lmstudio': 'LM Studio',
-      'ollama': 'Ollama',
-      'openai': 'OpenAI',
-      'gemini': 'Google Gemini',
-      'anthropic': 'Anthropic Claude'
+      'openrouter': 'OpenRouter'
     };
 
     const displayName = providerNames[provider] || provider;
